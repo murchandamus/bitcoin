@@ -2086,6 +2086,70 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
     }
 }
 
+static bool BranchAndBound(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vEffectiveValue, const vector<CAmount>& lookAhead, const CAmount& nTargetValue, const CAmount& nCostOfChange, vector<char>& vfBest)
+{
+    CAmount nRemaining = nTargetValue;
+    int lastIncluded = -1;
+    int depth = -1;
+    vector<char> selection;
+    selection.assign(vEffectiveValue.size(), false);
+
+    vfBest.assign(vValue.size(), true);
+
+    bool done = false;
+
+    // Explores binary tree in DFS
+    while(!done) {
+        if(nRemaining + nCostOfChange < 0) {
+            // Excessive selection, cut branch, retrace to previous last included.
+            nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
+            selection[lastIncluded] = false;
+            depth = lastIncluded +1;
+            while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
+                lastIncluded -= 1;
+            }
+        } else if(nRemaining <= 0) {
+            // Success, cost efficient selection found
+            done = true;
+        } else if(depth >= vEffectiveValue.size) {
+            // Leaf reached
+            if(lastIncluded < 0) {
+                // No solution
+                done = true;
+            } else {
+                // Leaf reached without solution, cut branch, retrace to previous last included.
+                nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
+                selection[lastIncluded] = false;
+                depth = lastIncluded +1;
+                while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
+                    lastIncluded -= 1;
+                }
+            }
+        } else if(nRemaining > lookAhead[depth]) {
+            // Branch has insufficient funds, cut branch, retrace to previous last included.
+            if(lastIncluded < 0) {
+                // No solution
+                done = true;
+            } else {
+                // cut branch, retrace to previous last included.
+                nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
+                selection[lastIncluded] = false;
+                depth = lastIncluded +1;
+                while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
+                    lastIncluded -= 1;
+                }
+            }
+       } else {
+            // Explore branch by adding coin at next depth
+            selection[depth] = true;
+            nRemaining = nRemaining - vEffectiveValue[depth].first;
+            lastIncluded = depth;
+            depth += 1;
+        }
+    }
+    vfBest = selection;
+}
+
 static void ApproximateBestSubset(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > >vValue, const CAmount& nTotalLower, const CAmount& nTargetValue,
                                   vector<char>& vfBest, CAmount& nBest, int iterations = 1000)
 {
