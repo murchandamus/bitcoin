@@ -2097,17 +2097,13 @@ static bool BranchAndBound(vector<pair<CAmount, pair<const CWalletTx*,unsigned i
     vfBest.assign(vValue.size(), true);
 
     bool done = false;
+    bool retrace = false;
 
     // Explores binary tree in DFS
     while(!done) {
         if(nRemaining + nCostOfChange < 0) {
             // Excessive selection, cut branch, retrace to previous last included.
-            nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
-            selection[lastIncluded] = false;
-            depth = lastIncluded +1;
-            while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
-                lastIncluded -= 1;
-            }
+            retrace = true;
         } else if(nRemaining <= 0) {
             // Success, cost efficient selection found
             done = true;
@@ -2118,12 +2114,7 @@ static bool BranchAndBound(vector<pair<CAmount, pair<const CWalletTx*,unsigned i
                 done = true;
             } else {
                 // Leaf reached without solution, cut branch, retrace to previous last included.
-                nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
-                selection[lastIncluded] = false;
-                depth = lastIncluded +1;
-                while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
-                    lastIncluded -= 1;
-                }
+                retrace = true;
             }
         } else if(nRemaining > lookAhead[depth]) {
             // Branch has insufficient funds, cut branch, retrace to previous last included.
@@ -2132,12 +2123,7 @@ static bool BranchAndBound(vector<pair<CAmount, pair<const CWalletTx*,unsigned i
                 done = true;
             } else {
                 // cut branch, retrace to previous last included.
-                nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
-                selection[lastIncluded] = false;
-                depth = lastIncluded +1;
-                while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
-                    lastIncluded -= 1;
-                }
+                retrace = true;
             }
        } else {
             // Explore branch by adding coin at next depth
@@ -2145,6 +2131,15 @@ static bool BranchAndBound(vector<pair<CAmount, pair<const CWalletTx*,unsigned i
             nRemaining = nRemaining - vEffectiveValue[depth].first;
             lastIncluded = depth;
             depth += 1;
+        }
+
+        if(!done && retrace) {
+            nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
+            selection[lastIncluded] = false;
+            depth = lastIncluded +1;
+            while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
+                lastIncluded -= 1;
+            }
         }
     }
     vfBest = selection;
