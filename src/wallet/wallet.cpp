@@ -2140,6 +2140,7 @@ static bool BranchAndBound(vector<pair<CAmount, pair<const CWalletTx*,unsigned i
             while(lastIncluded >= 0 && (selection[lastIncluded] == false)) {
                 lastIncluded -= 1;
             }
+            retrace = false;
         }
     }
     vfBest = selection;
