@@ -821,6 +821,22 @@ public:
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlySafe=true, const CCoinControl *coinControl = NULL, const CAmount& nMinimumAmount = 1, const CAmount& nMaximumAmount = MAX_MONEY, const CAmount& nMinimumSumAmount = MAX_MONEY, const uint64_t& nMaximumCount = 0, const int& nMinDepth = 0, const int& nMaxDepth = 9999999) const;
 
     /**
+     * calculate the effective contribution of a UTXO towards the target of a transaction by deducting its own cost of spending.
+     */
+    static vector<pair<CAmount, pair<const CWalletTX*,unsigned> > > GenerateEffectiveValues(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vValue, CAmount& feePerKiloByte, TXType txFormat) const;
+
+    /**
+     * calculate a lookahead for the effective sum of all UTXO with smaller value.
+     */
+    static vector<CAmount> GenerateLookahead(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > >vEffectiveValue) const;
+
+    /**
+     * Run the Branch and Bound selection strategy, as a replacement of ApproximateBestSubset.
+     * returns true if it found a valid input set, returns false otherwise.
+     */
+    static bool BnB(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vEffectiveValue, const vector<CAmount>& vLookahead, const CAmount& nTargetValue, vector<char>& vfBest, int nBnBTries, const CAmount& nCostOfChange);
+
+    /**
      * Shuffle and select coins until nTargetValue is reached while avoiding
      * small change; This method is stochastic for some inputs and upon
      * completion the coin set and corresponding actual target value is

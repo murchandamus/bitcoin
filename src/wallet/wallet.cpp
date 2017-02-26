@@ -2088,6 +2088,96 @@ void CWallet::AvailableCoins(std::vector<COutput> &vCoins, bool fOnlySafe, const
     }
 }
 
+static vector<pair<CAmount, pair<const CWalletTX*,unsigned> > > GenerateEffectiveValues(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vValue, CAmount& feePerKiloByte, TXType txFormat)
+{
+    vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vEffectiveValue;
+    for (int i = 0; i < vValue.size(); i++) {
+        TXType outputType = vValue[i].second.first->getTransactionType();
+        //look up size respective to outputType and txFormat
+        int size = 148;
+        CAmount effVal = vValue[i].first - roundup(size*feePerKiloByte/1000);
+        vEffectiveValue.push_back(pair(effVal, vValue[i].second);
+    }
+    std::sort(vEffectiveValue.begin(), vEffectiveValue.end(), CompareValueOnly());
+    std::reverse(vEffectiveValue.begin(), vEffectiveValue.end());
+    return vEffectiveValue;
+}
+
+static vector<CAmount> GenerateLookahead(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > >vEffectiveValue) {
+    vector<CAmount> lookahead;
+    lookahead.assign(vEffectiveValue.size(), 0);
+    CAmount lookaheadSum = 0;
+    for(int i = vEffectiveValue.size - 1; i > -1; i--) {
+        lookaheadSum =+ vEffectiveValue[i].first;
+        lookahead[i] = lookaheadSum;
+    }
+    return lookahead;
+}
+
+static bool BnB(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vEffectiveValue, const vector<CAmount>& vLookahead, const CAmount& nTargetValue, vector<char>& vfBest, int nBnBTries, const CAmount& nCostOfChange)
+{
+    vector<char> vfIncluded;
+    vfIncluded.assign(vEffectiveValue.size(), false);
+    CAmount nRemaining = nTargetValue;
+    int lastIncluded = -1;
+    int depth = 0;
+
+    vfBest.assign(vEffectiveValue.size(), true);
+
+    bool retrace = false;
+
+    // Explores binary tree in DFS
+    while(true) {
+        nBnBTries--;
+        if(nRemaining + nCostOfChange < 0) {
+            // Excessive selection, cut branch, retrace to previous last included.
+            retrace = true;
+        } else if(nRemaining <= 0) {
+            // Success: cost efficient selection found
+            vfBest = vfIncluded;
+            return true;
+        } else if (nBnBTries <= 0) {
+            // Fail: allowed tries exceeded.
+            return false;
+        } else if(depth >= vEffectiveValue.size) {
+            // Leaf reached
+            if(lastIncluded < 0) {
+                // Failure: everything searched, no valid solution.
+                return false;
+            } 
+            // Leaf reached without solution, cut branch, retrace to previous last included.
+            retrace = true;
+        } else if(nRemaining > vLookahead[depth]) {
+            // Branch has insufficient funds, cut branch, retrace to previous last included.
+            if(lastIncluded < 0) {
+                // Finished searching, no solution.
+                return false;
+            } 
+            // cut branch, retrace to previous last included.
+            retrace = true;
+       } else {
+            // Explore branch by adding coin at next depth
+            nRemaining = nRemaining - vEffectiveValue[depth].first;
+            vfIncluded[depth] = true;
+            lastIncluded = depth;
+            depth++;
+        }
+
+        if(retrace) {
+            nRemaining = nRemaining + vEffectiveValue[lastIncluded].first;
+            vfIncluded[lastIncluded] = false;
+            depth = lastIncluded +1;
+            while(lastIncluded >= 0 && (vfIncluded[lastIncluded] == false)) {
+                lastIncluded -= 1;
+            }
+            retrace = false;
+        }
+    }
+
+    // Done but no success, return false.
+    return false;
+}
+
 static void ApproximateBestSubset(const std::vector<CInputCoin>& vValue, const CAmount& nTotalLower, const CAmount& nTargetValue,
                                   std::vector<char>& vfBest, CAmount& nBest, int iterations = 1000)
 {
@@ -2132,6 +2222,94 @@ static void ApproximateBestSubset(const std::vector<CInputCoin>& vValue, const C
             }
         }
     }
+}
+
+bool CWallet::SelectCoinsMinConfBnB(const CAmount& nTargetValue, const int nConfMine, const int nConfTheirs, const uint64_t nMaxAncestors, vector<COutput> vCoins,
+                                 set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const
+{
+    setCoinsRet.clear();
+    nValueRet = 0;
+
+    // List of values less than target
+    pair<CAmount, pair<const CWalletTx*,unsigned int> > coinLowestLarger;
+    coinLowestLarger.first = std::numeric_limits<CAmount>::max();
+    coinLowestLarger.second.first = NULL;
+    vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vValue;
+    CAmount nTotalLower = 0;
+
+    random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
+
+    BOOST_FOREACH(const COutput &output, vCoins)
+    {
+        if (!output.fSpendable)
+            continue;
+
+        const CWalletTx *pcoin = output.tx;
+
+        if (output.nDepth < (pcoin->IsFromMe(ISMINE_ALL) ? nConfMine : nConfTheirs))
+            continue;
+
+        if (!mempool.TransactionWithinChainLimit(pcoin->GetHash(), nMaxAncestors))
+            continue;
+
+        int i = output.i;
+        CAmount n = pcoin->tx->vout[i].nValue;
+
+        pair<CAmount,pair<const CWalletTx*,unsigned int> > coin = make_pair(n,make_pair(pcoin, i));
+
+        vValue.push_back(coin);
+    }
+
+    // Solve subset sum by stochastic approximation
+    vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vEffectiveValue;
+    vEffectiveValue = GenerateEffectiveValues(vValue, feePerKiloByte, TXType txFormat)
+
+    vector<CAmount> lookahead = GenerateLookahead(vEffectiveValue);
+
+    vector<char> vfBest;
+    int branchAndBoundTries = 1000000;
+    CAmount extraCostForChange = feePerKiloByte*txFormat->getOutputSize();
+
+    if(BnB(vEffectiveValue, lookahead, nTargetValue, vfBest, branchAndBoundTries, extraCostForChange) == false) 
+    {
+        
+        //Randomselection
+        random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
+        
+        CAmount currentAmount = 0;
+        vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > currentSet;
+        int i = 0;
+        while(currentAmount < nTargetValue + estimateFees(currentSet)) {
+            currentAmount = currentAmount + vCoins[i].first;
+            currentSet.push_back(vCoins[i].second);
+        }
+        vfBest = currentSet;
+    }
+
+    // If we have a bigger coin and (either the stochastic approximation didn't find a good solution,
+    //                                   or the next bigger coin is closer), return the bigger coin
+    if (coinLowestLarger.second.first &&
+        ((nBest != nTargetValue && nBest < nTargetValue + MIN_CHANGE) || coinLowestLarger.first <= nBest))
+    {
+        setCoinsRet.insert(coinLowestLarger.second);
+        nValueRet += coinLowestLarger.first;
+    }
+    else {
+        for (unsigned int i = 0; i < vValue.size(); i++)
+            if (vfBest[i])
+            {
+                setCoinsRet.insert(vValue[i].second);
+                nValueRet += vValue[i].first;
+            }
+
+        LogPrint("selectcoins", "SelectCoins() best subset: ");
+        for (unsigned int i = 0; i < vValue.size(); i++)
+            if (vfBest[i])
+                LogPrint("selectcoins", "%s ", FormatMoney(vValue[i].first));
+        LogPrint("selectcoins", "total %s\n", FormatMoney(nBest));
+    }
+
+    return true;
 }
 
 bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMine, const int nConfTheirs, const uint64_t nMaxAncestors, std::vector<COutput> vCoins,
