@@ -2088,9 +2088,9 @@ void CWallet::AvailableCoins(std::vector<COutput> &vCoins, bool fOnlySafe, const
     }
 }
 
-static vector<pair<CAmount, pair<const CWalletTX*,unsigned> > > GenerateEffectiveValues(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vValue, CAmount& feePerKiloByte, TXType txFormat)
+static std::vector<CInputCoin> GenerateEffectiveValues(std::vector<CInputCoin>& vValue, CAmount& feePerKiloByte, TXType txFormat)
 {
-    vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vEffectiveValue;
+    std::vector<CInputCoin> vEffectiveValue;
     for (int i = 0; i < vValue.size(); i++) {
         TXType outputType = vValue[i].second.first->getTransactionType();
         //look up size respective to outputType and txFormat
@@ -2103,7 +2103,7 @@ static vector<pair<CAmount, pair<const CWalletTX*,unsigned> > > GenerateEffectiv
     return vEffectiveValue;
 }
 
-static vector<CAmount> GenerateLookahead(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > >vEffectiveValue) {
+static std::vector<CAmount> GenerateLookahead(std::vector<CInputCoin>& vEffectiveValue) {
     vector<CAmount> lookahead;
     lookahead.assign(vEffectiveValue.size(), 0);
     CAmount lookaheadSum = 0;
@@ -2114,7 +2114,7 @@ static vector<CAmount> GenerateLookahead(vector<pair<CAmount, pair<const CWallet
     return lookahead;
 }
 
-static bool BnB(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vEffectiveValue, const vector<CAmount>& vLookahead, const CAmount& nTargetValue, vector<char>& vfBest, int nBnBTries, const CAmount& nCostOfChange)
+static bool BnB(std::vector<CInputCoin>& vEffectiveValue, const vector<CAmount>& vLookahead, const CAmount& nTargetValue, vector<char>& vfBest, int nBnBTries, const CAmount& nCostOfChange)
 {
     vector<char> vfIncluded;
     vfIncluded.assign(vEffectiveValue.size(), false);
@@ -2225,7 +2225,7 @@ static void ApproximateBestSubset(const std::vector<CInputCoin>& vValue, const C
 }
 
 bool CWallet::SelectCoinsMinConfBnB(const CAmount& nTargetValue, const int nConfMine, const int nConfTheirs, const uint64_t nMaxAncestors, vector<COutput> vCoins,
-                                 set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const
+                                 std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet) const
 {
     setCoinsRet.clear();
     nValueRet = 0;
