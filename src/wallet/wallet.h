@@ -453,6 +453,9 @@ public:
     CAmount GetAvailableWatchOnlyCredit(const bool& fUseCache=true) const;
     CAmount GetChange() const;
 
+    // Get the marginal bytes if spending the specified output from this transaction
+    int GetSpendSize(unsigned int i) const;
+
     void GetAmounts(std::list<COutputEntry>& listReceived,
                     std::list<COutputEntry>& listSent, CAmount& nFee, std::string& strSentAccount, const isminefilter& filter) const;
 
@@ -513,6 +516,9 @@ public:
     int i;
     int nDepth;
 
+    /** Pre-computed estimated size of this output as a fully-signed input in a transaction */
+    int nInputBytes;
+
     /** Whether we have the private keys to spend this output */
     bool fSpendable;
 
@@ -528,7 +534,12 @@ public:
 
     COutput(const CWalletTx *txIn, int iIn, int nDepthIn, bool fSpendableIn, bool fSolvableIn, bool fSafeIn)
     {
-        tx = txIn; i = iIn; nDepth = nDepthIn; fSpendable = fSpendableIn; fSolvable = fSolvableIn; fSafe = fSafeIn;
+        tx = txIn; i = iIn; nDepth = nDepthIn; fSpendable = fSpendableIn; fSolvable = fSolvableIn; fSafe = fSafeIn; nInputBytes = -1;
+        // If known and signable by the given wallet, compute nInputBytes
+        // Failure will keep this value -1
+        if (fSpendable && tx) {
+            nInputBytes = tx->GetSpendSize(i);
+        }
     }
 
     std::string ToString() const;
@@ -663,7 +674,8 @@ private:
      * all coins from coinControl are selected; Never select unconfirmed coins
      * if they are not ours
      */
-    bool SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, const CCoinControl *coinControl = nullptr) const;
+     // TODO: Change the hard coded change_size later when we aren't just using P2PKH change outputs
+    bool SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, CAmount& fee_ret, const CFeeRate effective_fee, const CCoinControl& coin_control, bool use_bnb = true, int change_size = 148+34) const;
 
     CWalletDB *pwalletdbEncryption;
 
@@ -835,7 +847,10 @@ public:
      * completion the coin set and corresponding actual target value is
      * assembled
      */
-    bool SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int nConfTheirs, uint64_t nMaxAncestors, std::vector<COutput> vCoins, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet) const;
+     // TODO: Change the hard coded change_size when we aren't only using P2PKH change outputs
+    bool SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int nConfTheirs, uint64_t nMaxAncestors, std::vector<COutput> vCoins,
+        std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, CAmount& fee_ret, const CFeeRate effective_fee,
+        bool use_bnb = true, int change_output_size = 34, int change_spend_size = 148) const;
 
     bool IsSpent(const uint256& hash, unsigned int n) const;
 
@@ -1195,4 +1210,12 @@ bool CWallet::DummySignTx(CMutableTransaction &txNew, const ContainerType &coins
     return true;
 }
 
+// Calculate the size of the transaction assuming all signatures are max size
+// Use DummySignatureCreator, which inserts 72 byte signatures everywhere.
+// TODO: re-use this in CWallet::CreateTransaction (right now
+// CreateTransaction uses the constructed dummy-signed tx to do a priority
+// calculation, but we should be able to refactor after priority is removed).
+// NOTE: this requires that all inputs must be in mapWallet (eg the tx should
+// be IsAllFromMe).
+int64_t CalculateMaximumSignedTxSize(const CTransaction &tx, const CWallet *pWallet);
 #endif // BITCOIN_WALLET_WALLET_H
