@@ -27,6 +27,18 @@ CAmount GetRequiredFee(unsigned int nTxBytes);
 CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl& coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc);
 
 /**
+ * Return the minimum required fee taking into account the
+ * floating relay fee and user set minimum transaction fee
+ */
+CFeeRate GetRequiredFeeRate();
+
+/**
+ * Estimate the minimum fee rate considering user set parameters
+ * and the required fee
+ */
+CFeeRate GetMinimumFeeRate(const CCoinControl& coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc);
+
+/**
  * Return the maximum feerate for discarding change.
  */
 CFeeRate GetDiscardRate(const CBlockPolicyEstimator& estimator);

@@ -2592,9 +2592,17 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
             size_t change_prototype_size = GetSerializeSize(change_prototype_txout, SER_DISK, 0);
 
             CFeeRate discard_rate = GetDiscardRate(::feeEstimator);
+
+            // Get the fee rate to use effective values in coin selection
+            CFeeRate nFeeRateNeeded = GetMinimumFeeRate(coin_control, ::mempool, ::feeEstimator, &feeCalc);
+
             nFeeRet = 0;
             bool pick_new_inputs = true;
             CAmount nValueIn = 0;
+
+            // BnB selector is the only selector used when this is true.
+            // That should only happen on the first pass through the loop.
+            bool use_bnb = true;
             // Start with no fee and loop until there is enough fee
             while (true)
             {
@@ -2607,7 +2615,9 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                 CAmount nValueToSelect = nValue;
                 if (nSubtractFeeFromAmount == 0)
                     nValueToSelect += nFeeRet;
+
                 // vouts to the payees
+                CAmount output_fees = 0;
                 for (const auto& recipient : vecSend)
                 {
                     CTxOut txout(recipient.nAmount, recipient.scriptPubKey);
@@ -2621,6 +2631,9 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                             fFirst = false;
                             txout.nValue -= nFeeRet % nSubtractFeeFromAmount;
                         }
+                    } else if (use_bnb){
+                        // On the first pass BnB selector, include the fee cost for outputs
+                        output_fees +=  nFeeRateNeeded.GetFee(::GetSerializeSize(txout, SER_NETWORK, PROTOCOL_VERSION));
                     }
 
                     if (IsDust(txout, ::dustRelayFee))
@@ -2638,21 +2651,33 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                     }
                     txNew.vout.push_back(txout);
                 }
+                if (use_bnb) {
+                    nValueToSelect += output_fees;
+                }
 
                 // Choose coins to use
                 if (pick_new_inputs) {
                     nValueIn = 0;
                     setCoins.clear();
-                    if (!SelectCoins(vAvailableCoins, nValueToSelect, setCoins, nValueIn, &coin_control))
+                    if (!SelectCoins(vAvailableCoins, nValueToSelect, setCoins, nValueIn, nFeeRet, nFeeRateNeeded, coin_control, use_bnb))
                     {
-                        strFailReason = _("Insufficient funds");
-                        return false;
+                        // If BnB was used, it was the first pass. No longer the first pass and continue loop with knapsack.
+                        if (use_bnb) {
+                            use_bnb = false;
+                            continue;
+                        }
+                        else {
+                            strFailReason = _("Insufficient funds");
+                            return false;
+                        }
+                    }
+                    if (use_bnb) {
+                        nFeeRet += output_fees;
                     }
                 }
 
                 const CAmount nChange = nValueIn - nValueToSelect;
-
-                if (nChange > 0)
+                if (nChange > 0 && !use_bnb) // Don't make change if bnb selector was used
                 {
                     // Fill a vout to ourself
                     CTxOut newTxOut(nChange, scriptChange);
@@ -2783,6 +2808,7 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
 
                 // Include more fee and try again.
                 nFeeRet = nFeeNeeded;
+                use_bnb = false;
                 continue;
             }
         }
