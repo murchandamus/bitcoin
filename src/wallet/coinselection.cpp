@@ -23,7 +23,8 @@ struct CompareValueOnly
     }
 };
 
-bool SelectCoinsBnB(std::vector<CInputCoin>& utxo_pool, const CAmount& target_value, const CAmount& cost_of_change, std::set<CInputCoin>& out_set, CAmount& value_ret, std::vector<CAmount>& fee_vec, CAmount& fee_ret)
+bool SelectCoinsBnB(std::vector<CInputCoin>& utxo_pool, const CAmount& target_value, const CAmount& cost_of_change, std::set<CInputCoin>& out_set,
+    CAmount& value_ret, std::vector<CAmount>& fee_vec, std::vector<CAmount>& long_term_fee_vec, CAmount& fee_ret)
 {
     out_set.clear();
     value_ret = 0;
@@ -48,20 +49,33 @@ bool SelectCoinsBnB(std::vector<CInputCoin>& utxo_pool, const CAmount& target_va
         remaining += utxo.txout.nValue;
     }
 
+    // Best solution
+    CAmount curr_waste = 0;
+    std::vector<std::pair<bool, bool>> best_selection;
+    CAmount best_waste = MAX_MONEY;
+
     // Depth first search to find
     while (!done)
     {
         if (tries <= 0) { // Too many tries, exit
-            return false;
+            break;
         } else if (value_ret > target_value + cost_of_change) { // Selected value is out of range, go back and try other branch
             backtrack = true;
+        } else if (curr_waste > best_waste) { // Don't select things which we know will be more wasteful
+            backtrack = true;
         } else if (value_ret >= target_value) { // Selected value is within range
-            done = true;
+            curr_waste += value_ret - target_value;
+            if (curr_waste <= best_waste) {
+                best_selection.assign(selection.begin(), selection.end());
+                best_waste = curr_waste;
+            }
+            curr_waste -= value_ret - target_value;
+            backtrack = true;
         } else if (depth >= (int)utxo_pool.size()) { // Reached a leaf node, no solution here
             backtrack = true;
         } else if (value_ret + remaining < target_value) { // Cannot possibly reach target with amount remaining
             if (depth == 0) { // At the first utxo, no possible selections, so exit
-                return false;
+                break;
             } else {
                 backtrack = true;
             }
@@ -71,6 +85,8 @@ bool SelectCoinsBnB(std::vector<CInputCoin>& utxo_pool, const CAmount& target_va
 
             // Remove this utxo from the remaining utxo amount
             remaining -= utxo_pool.at(depth).txout.nValue;
+            // Increase waste
+            curr_waste += fee_vec[depth] - long_term_fee_vec[depth];
             // Inclusion branch first (Largest First Exploration)
             selection.at(depth).first = true;
             value_ret += utxo_pool.at(depth).txout.nValue;
@@ -87,6 +103,7 @@ bool SelectCoinsBnB(std::vector<CInputCoin>& utxo_pool, const CAmount& target_va
                 // Reset this utxo's selection
                 if (selection.at(depth).first) {
                     value_ret -= utxo_pool.at(depth).txout.nValue;
+                    curr_waste -= fee_vec[depth] - long_term_fee_vec[depth];
                 }
                 selection.at(depth).first = false;
                 selection.at(depth).second = false;
@@ -96,7 +113,8 @@ bool SelectCoinsBnB(std::vector<CInputCoin>& utxo_pool, const CAmount& target_va
                 --depth;
 
                 if (depth < 0) { // We have walked back to the first utxo and no branch is untraversed. No solution, exit.
-                    return false;
+                    done = true;
+                    break;
                 }
             }
 
@@ -107,17 +125,25 @@ bool SelectCoinsBnB(std::vector<CInputCoin>& utxo_pool, const CAmount& target_va
                 // These were always included first, try excluding now
                 selection.at(depth).first = false;
                 value_ret -= utxo_pool.at(depth).txout.nValue;
+                curr_waste -= fee_vec[depth] - long_term_fee_vec[depth];
                 ++depth;
             }
         }
         --tries;
     }
 
+    // Check for solution
+    if (best_selection.empty()) {
+        return false;
+    }
+
     // Set output set
-    for (unsigned int i = 0; i < selection.size(); ++i) {
-        if (selection.at(i).first) {
+    value_ret = 0;
+    for (unsigned int i = 0; i < best_selection.size(); ++i) {
+        if (best_selection.at(i).first) {
             out_set.insert(utxo_pool.at(i));
             fee_ret += fee_vec.at(i);
+            value_ret += utxo_pool.at(i).txout.nValue;
         }
     }
 

@@ -2294,11 +2294,18 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMin
     std::vector<CInputCoin> vValue;
     if (use_bnb) {
 
+        // Get long term estimate
+        FeeCalculation feeCalc;
+        CCoinControl temp;
+        temp.m_confirm_target = 1008;
+        CFeeRate long_term_feerate = GetMinimumFeeRate(temp, ::mempool, ::feeEstimator, &feeCalc);
+
         // Calculate cost of change
         CAmount cost_of_change = GetDiscardRate(::feeEstimator).GetFee(change_spend_size) + effective_fee.GetFee(change_output_size);
 
         // Filter by the min conf specs and add to vValue and calculate effective value
         std::vector<CAmount> fee_vec; // To keep track of the fees for each input
+        std::vector<CAmount> long_term_fee_vec; // To keep track of the long term fees for each input
         for (const COutput &output : vCoins)
         {
             if (!output.fSpendable)
@@ -2319,9 +2326,10 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMin
             if (coin.txout.nValue > 0) {
                 vValue.push_back(coin);
                 fee_vec.push_back(output.nInputBytes < 0 ? 0 : effective_fee.GetFee(output.nInputBytes));
+                long_term_fee_vec.push_back(output.nInputBytes < 0 ? 0 : long_term_feerate.GetFee(output.nInputBytes));
             }
         }
-        return SelectCoinsBnB(vValue, nTargetValue, cost_of_change, setCoinsRet, nValueRet, fee_vec, fee_ret);
+        return SelectCoinsBnB(vValue, nTargetValue, cost_of_change, setCoinsRet, nValueRet, fee_vec, long_term_fee_vec, fee_ret);
     } else {
         // Filter by the min conf specs and add to vValue
         for (const COutput &output : vCoins)
