@@ -2349,7 +2349,7 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMin
             CInputCoin coin(pcoin, i);
             vValue.push_back(coin);
         }
-        return KnapsackSolver(vValue, nTargetValue, setCoinsRet, nValueRet);
+        return RandomSelector(vValue, nTargetValue, setCoinsRet, nValueRet);
     }
 }
 

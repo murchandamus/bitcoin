@@ -196,92 +196,47 @@ static void ApproximateBestSubset(const std::vector<CInputCoin>& vValue, const C
     }
 }
 
-bool KnapsackSolver(std::vector<CInputCoin>& utxo_pool, const CAmount& nTargetValue, std::set<CInputCoin>& out_set, CAmount& value_ret)
+bool RandomSelector(std::vector<CInputCoin>& utxo_pool, const CAmount& nTargetValue, std::set<CInputCoin>& out_set, CAmount& value_ret)
 {
     out_set.clear();
     value_ret = 0;
-
-    // List of values less than target
-    boost::optional<CInputCoin> coinLowestLarger;
-    std::vector<CInputCoin> vValue;
-    CAmount nTotalLower = 0;
 
     random_shuffle(utxo_pool.begin(), utxo_pool.end(), GetRandInt);
 
     for (const CInputCoin coin : utxo_pool)
     {
-        if (coin.txout.nValue == nTargetValue)
-        {
+        if (coin.txout.nValue < nTargetValue + MIN_CHANGE) {
             out_set.insert(coin);
             value_ret += coin.txout.nValue;
+        } else {
             return true;
         }
-        else if (coin.txout.nValue < nTargetValue + MIN_CHANGE)
-        {
-            vValue.push_back(coin);
-            nTotalLower += coin.txout.nValue;
-        }
-        else if (!coinLowestLarger || coin.txout.nValue < coinLowestLarger->txout.nValue)
-        {
-            coinLowestLarger = coin;
-        }
     }
 
-    if (nTotalLower == nTargetValue)
+    if (coin.txout.nValue < nTargetValue + MIN_CHANGE) {
+        return false;
+    }
+}
+
+bool LargestFirstSelector(std::vector<CInputCoin>& utxo_pool, const CAmount& nTargetValue, std::set<CInputCoin>& out_set, CAmount& value_ret)
+{
+    out_set.clear();
+    value_ret = 0;
+
+    std::sort(utxo_pool.begin(), utxo_pool.end(), CompareValueOnly());
+    std::reverse(utxo_pool.begin(), utxo_pool.end());
+
+    for (const CInputCoin coin : utxo_pool)
     {
-        for (const auto& input : vValue)
-        {
-            out_set.insert(input);
-            value_ret += input.txout.nValue;
-        }
-        return true;
-    }
-
-    if (nTotalLower < nTargetValue)
-    {
-        if (!coinLowestLarger)
-            return false;
-        out_set.insert(coinLowestLarger.get());
-        value_ret += coinLowestLarger->txout.nValue;
-        return true;
-    }
-
-    // Solve subset sum by stochastic approximation
-    std::sort(vValue.begin(), vValue.end(), CompareValueOnly());
-    std::reverse(vValue.begin(), vValue.end());
-    std::vector<char> vfBest;
-    CAmount nBest;
-
-    ApproximateBestSubset(vValue, nTotalLower, nTargetValue, vfBest, nBest);
-    if (nBest != nTargetValue && nTotalLower >= nTargetValue + MIN_CHANGE)
-        ApproximateBestSubset(vValue, nTotalLower, nTargetValue + MIN_CHANGE, vfBest, nBest);
-
-    // If we have a bigger coin and (either the stochastic approximation didn't find a good solution,
-    //                                   or the next bigger coin is closer), return the bigger coin
-    if (coinLowestLarger &&
-        ((nBest != nTargetValue && nBest < nTargetValue + MIN_CHANGE) || coinLowestLarger->txout.nValue <= nBest))
-    {
-        out_set.insert(coinLowestLarger.get());
-        value_ret += coinLowestLarger->txout.nValue;
-    }
-    else {
-        for (unsigned int i = 0; i < vValue.size(); i++)
-            if (vfBest[i])
-            {
-                out_set.insert(vValue[i]);
-                value_ret += vValue[i].txout.nValue;
-            }
-
-        if (LogAcceptCategory(BCLog::SELECTCOINS)) {
-            LogPrint(BCLog::SELECTCOINS, "SelectCoins() best subset: ");
-            for (unsigned int i = 0; i < vValue.size(); i++) {
-                if (vfBest[i]) {
-                    LogPrint(BCLog::SELECTCOINS, "%s ", FormatMoney(vValue[i].txout.nValue));
-                }
-            }
-            LogPrint(BCLog::SELECTCOINS, "total %s\n", FormatMoney(nBest));
+        if (coin.txout.nValue < nTargetValue + MIN_CHANGE) {
+            out_set.insert(coin);
+            value_ret += coin.txout.nValue;
+        } else {
+            return true;
         }
     }
 
-    return true;
+    if (coin.txout.nValue < nTargetValue ) {
+        return false;
+    }
 }
