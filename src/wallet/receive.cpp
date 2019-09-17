@@ -12,7 +12,7 @@ namespace wallet {
 isminetype InputIsMine(const CWallet& wallet, const CTxIn &txin)
 {
     AssertLockHeld(wallet.cs_wallet);
-    std::map<uint256, CWalletTx>::const_iterator mi = wallet.mapWallet.find(txin.prevout.hash);
+    const auto mi = wallet.mapWallet.find(txin.prevout.hash);
     if (mi != wallet.mapWallet.end())
     {
         const CWalletTx& prev = (*mi).second;
