@@ -1112,7 +1112,7 @@ static RPCHelpMan estimatesmartfee()
     UniValue errors(UniValue::VARR);
     FeeCalculation feeCalc;
     CFeeRate feeRate = fee_estimator.estimateSmartFee(conf_target, &feeCalc, conservative);
-    if (feeRate != CFeeRate(0)) {
+    if (!feeRate.IsZero()) {
         result.pushKV("feerate", ValueFromAmount(feeRate.GetFeeRate()));
     } else {
         errors.push_back("Insufficient data or no feerate found");
@@ -1223,7 +1223,7 @@ static RPCHelpMan estimaterawfee()
         failbucket.pushKV("leftmempool", round(buckets.fail.leftMempool * 100.0) / 100.0);
 
         // CFeeRate(0) is used to indicate error as a return value from estimateRawFee
-        if (feeRate != CFeeRate(0)) {
+        if (!feeRate.IsZero()) {
             horizon_result.pushKV("feerate", ValueFromAmount(feeRate.GetFeeRate()));
             horizon_result.pushKV("decay", buckets.decay);
             horizon_result.pushKV("scale", (int)buckets.scale);

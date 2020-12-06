@@ -87,6 +87,15 @@ BOOST_AUTO_TEST_CASE(GetFeeTest)
     CFeeRate(MAX_MONEY, std::numeric_limits<uint32_t>::max()).GetFeeRate();
 }
 
+BOOST_AUTO_TEST_CASE(CFeeRateIsZeroTest)
+{
+    BOOST_CHECK(CFeeRate(0).IsZero());
+    BOOST_CHECK(!CFeeRate(1000).IsZero());
+    BOOST_CHECK(!CFeeRate(-1000).IsZero());
+    BOOST_CHECK(CFeeRate(CAmount(0), 0).IsZero());
+    BOOST_CHECK(CFeeRate(CAmount(1), 1001).IsZero());
+}
+
 BOOST_AUTO_TEST_CASE(BinaryOperatorTest)
 {
     CFeeRate a, b;

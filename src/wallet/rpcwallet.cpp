@@ -2315,7 +2315,7 @@ static RPCHelpMan settxfee()
     CAmount nAmount = AmountFromValue(request.params[0]);
     CFeeRate tx_fee_rate(nAmount, 1000);
     CFeeRate max_tx_fee_rate(pwallet->m_default_max_tx_fee, 1000);
-    if (tx_fee_rate == CFeeRate(0)) {
+    if (tx_fee_rate.IsZero()) {
         // automatic selection
     } else if (tx_fee_rate < pwallet->chain().relayMinFee()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("txfee cannot be less than min relay tx fee (%s)", pwallet->chain().relayMinFee().ToString()));

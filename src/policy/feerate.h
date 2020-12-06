@@ -33,6 +33,7 @@ private:
 public:
     /** Fee rate of 0 satoshis per kB */
     CFeeRate() : m_sats_per_kvB(0) { }
+    bool IsZero() const { return m_sats_per_kvB == 0; }
     template<typename I>
     explicit CFeeRate(const I _m_sats_per_kvB): m_sats_per_kvB(_m_sats_per_kvB) {
         // We've previously had bugs creep in from silent double->int conversion...
