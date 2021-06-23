@@ -23,13 +23,12 @@ enum class FeeEstimateMode {
     SAT_VB,       //!< Use sat/vB fee rate unit
 };
 
-/**
- * Fee rate in satoshis per kilobyte: CAmount / kB
- */
+/** Fee rate in satoshis per kilovbyte: CAmount / kvB */
 class CFeeRate
 {
 private:
-    CAmount nSatoshisPerK; // unit is satoshis-per-1,000-bytes
+    /** fee rate in [sat/kvB] (satoshis per kilovirtualbyte) */
+    CAmount nSatoshisPerK;
 
 public:
     /** Fee rate of 0 satoshis per kB */
@@ -39,20 +38,34 @@ public:
         // We've previously had bugs creep in from silent double->int conversion...
         static_assert(std::is_integral<I>::value, "CFeeRate should be used without floats");
     }
-    /** Constructor for a fee rate in satoshis per kvB (sat/kvB).
+
+    /**
+     * Constructor for a fee rate in [sat/kvB]
      *
-     *  Passing a num_bytes value of COIN (1e8) returns a fee rate in satoshis per vB (sat/vB),
-     *  e.g. (nFeePaid * 1e8 / 1e3) == (nFeePaid / 1e5),
-     *  where 1e5 is the ratio to convert from BTC/kvB to sat/vB.
+     * Calculates the fee rate of a transaction from its absolute fee and
+     * vsize.
+     *
+     * Deprecated use to be replaced by dedicated functions: can be used to
+     * convert a fee rate with a different unit to CFeeRate by passing the fee
+     * rate in `nFeePaid` and the ratio as a divisor in `num_bytes`. E.g.
+     * convert [BTC/kvB] to CFeeRate by multiplying input fee rate by COIN and
+     * passing 1000 to num_bytes:
+     * nFeePaid [BTC/kvB] × 1e8 [sat/BTC] / 1e3 [vB/kvB] = CFeeRate [sat/kvB]
+     *
+     * param@[in]   nFeePaid    The fee paid by a transaction in satoshis |
+     *                          alt use: fee rate in e.g. [BTC/kvB] or [sat/B]
+     * param@[in]   num_bytes   The vsize of a transaction in vbytes |
+     *                          alt use: divisor for converting a fee rate
+     *                          denominated in another unit to [sat/kvB]
      */
     CFeeRate(const CAmount& nFeePaid, uint32_t num_bytes);
     /**
-     * Return the fee in satoshis for the given size in bytes.
+     * Return the fee to achieve a fee rate of nSatoshisPerK for a given
+     * vsize in vbytes.
+     * param@[in]   num_bytes   The vsize to calculate an absolute fee for
      */
     CAmount GetFee(uint32_t num_bytes) const;
-    /**
-     * Return the fee in satoshis for a size of 1000 bytes
-     */
+    /** Returns the fee rate in [sat/kvB] */
     CAmount GetFeePerK() const { return GetFee(1000); }
     friend bool operator<(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK < b.nSatoshisPerK; }
     friend bool operator>(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK > b.nSatoshisPerK; }
