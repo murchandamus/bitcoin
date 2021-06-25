@@ -7,7 +7,7 @@
 
 #include <tinyformat.h>
 
-CFeeRate::CFeeRate(const CAmount& nFeePaid, uint32_t num_bytes)
+CFeeRate::CFeeRate(CAmount nFeePaid, uint32_t num_bytes)
 {
     const int64_t nSize{num_bytes};
 
@@ -32,7 +32,7 @@ CAmount CFeeRate::GetFee(uint32_t num_bytes) const
     return nFee;
 }
 
-std::string CFeeRate::ToString(const FeeEstimateMode& fee_estimate_mode) const
+std::string CFeeRate::ToString(FeeEstimateMode fee_estimate_mode) const
 {
     switch (fee_estimate_mode) {
     case FeeEstimateMode::SAT_VB: return strprintf("%d.%03d %s/vB", m_sats_per_kvB / 1000, m_sats_per_kvB % 1000, CURRENCY_ATOM);

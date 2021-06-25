@@ -58,7 +58,7 @@ public:
      *                          alt use: divisor for converting a fee rate
      *                          denominated in another unit to [sat/kvB]
      */
-    CFeeRate(const CAmount& nFeePaid, uint32_t num_bytes);
+    CFeeRate(CAmount nFeePaid, uint32_t num_bytes);
     /**
      * Return the fee to achieve a fee rate of m_sats_per_kvB for a given
      * vsize in vbytes.
@@ -74,7 +74,7 @@ public:
     friend bool operator>=(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB >= b.m_sats_per_kvB; }
     friend bool operator!=(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB != b.m_sats_per_kvB; }
     CFeeRate& operator+=(const CFeeRate& a) { m_sats_per_kvB += a.m_sats_per_kvB; return *this; }
-    std::string ToString(const FeeEstimateMode& fee_estimate_mode = FeeEstimateMode::BTC_KVB) const;
+    std::string ToString(FeeEstimateMode fee_estimate_mode = FeeEstimateMode::BTC_KVB) const;
 
     SERIALIZE_METHODS(CFeeRate, obj) { READWRITE(obj.m_sats_per_kvB); }
 };
