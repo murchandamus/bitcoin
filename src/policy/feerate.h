@@ -28,13 +28,13 @@ class CFeeRate
 {
 private:
     /** fee rate in [sat/kvB] (satoshis per kilovirtualbyte) */
-    CAmount nSatoshisPerK;
+    CAmount m_sats_per_kvB;
 
 public:
     /** Fee rate of 0 satoshis per kB */
-    CFeeRate() : nSatoshisPerK(0) { }
+    CFeeRate() : m_sats_per_kvB(0) { }
     template<typename I>
-    explicit CFeeRate(const I _nSatoshisPerK): nSatoshisPerK(_nSatoshisPerK) {
+    explicit CFeeRate(const I _m_sats_per_kvB): m_sats_per_kvB(_m_sats_per_kvB) {
         // We've previously had bugs creep in from silent double->int conversion...
         static_assert(std::is_integral<I>::value, "CFeeRate should be used without floats");
     }
@@ -60,23 +60,23 @@ public:
      */
     CFeeRate(const CAmount& nFeePaid, uint32_t num_bytes);
     /**
-     * Return the fee to achieve a fee rate of nSatoshisPerK for a given
+     * Return the fee to achieve a fee rate of m_sats_per_kvB for a given
      * vsize in vbytes.
      * param@[in]   num_bytes   The vsize to calculate an absolute fee for
      */
     CAmount GetFee(uint32_t num_bytes) const;
     /** Returns the fee rate in [sat/kvB] */
     CAmount GetFeePerK() const { return GetFee(1000); }
-    friend bool operator<(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK < b.nSatoshisPerK; }
-    friend bool operator>(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK > b.nSatoshisPerK; }
-    friend bool operator==(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK == b.nSatoshisPerK; }
-    friend bool operator<=(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK <= b.nSatoshisPerK; }
-    friend bool operator>=(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK >= b.nSatoshisPerK; }
-    friend bool operator!=(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK != b.nSatoshisPerK; }
-    CFeeRate& operator+=(const CFeeRate& a) { nSatoshisPerK += a.nSatoshisPerK; return *this; }
+    friend bool operator<(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB < b.m_sats_per_kvB; }
+    friend bool operator>(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB > b.m_sats_per_kvB; }
+    friend bool operator==(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB == b.m_sats_per_kvB; }
+    friend bool operator<=(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB <= b.m_sats_per_kvB; }
+    friend bool operator>=(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB >= b.m_sats_per_kvB; }
+    friend bool operator!=(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB != b.m_sats_per_kvB; }
+    CFeeRate& operator+=(const CFeeRate& a) { m_sats_per_kvB += a.m_sats_per_kvB; return *this; }
     std::string ToString(const FeeEstimateMode& fee_estimate_mode = FeeEstimateMode::BTC_KVB) const;
 
-    SERIALIZE_METHODS(CFeeRate, obj) { READWRITE(obj.nSatoshisPerK); }
+    SERIALIZE_METHODS(CFeeRate, obj) { READWRITE(obj.m_sats_per_kvB); }
 };
 
 #endif //  BITCOIN_POLICY_FEERATE_H
