@@ -66,7 +66,7 @@ public:
      */
     CAmount GetFee(uint32_t num_bytes) const;
     /** Returns the fee rate in [sat/kvB] */
-    CAmount GetFeePerK() const { return GetFee(1000); }
+    CAmount GetFeeRate() const { return m_sats_per_kvB; }
     friend bool operator<(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB < b.m_sats_per_kvB; }
     friend bool operator>(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB > b.m_sats_per_kvB; }
     friend bool operator==(const CFeeRate& a, const CFeeRate& b) { return a.m_sats_per_kvB == b.m_sats_per_kvB; }

@@ -67,11 +67,11 @@ static feebumper::Result CheckFeeRate(const CWallet& wallet, const CWalletTx& wt
     // moment earlier. In this case, we report an error to the user, who may adjust the fee.
     CFeeRate minMempoolFeeRate = wallet.chain().mempoolMinFee();
 
-    if (newFeerate.GetFeePerK() < minMempoolFeeRate.GetFeePerK()) {
+    if (newFeerate.GetFeeRate() < minMempoolFeeRate.GetFeeRate()) {
         errors.push_back(strprintf(
             Untranslated("New fee rate (%s) is lower than the minimum fee rate (%s) to get into the mempool -- "),
-            FormatMoney(newFeerate.GetFeePerK()),
-            FormatMoney(minMempoolFeeRate.GetFeePerK())));
+            FormatMoney(newFeerate.GetFeeRate()),
+            FormatMoney(minMempoolFeeRate.GetFeeRate())));
         return feebumper::Result::WALLET_ERROR;
     }
 

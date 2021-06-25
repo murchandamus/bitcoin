@@ -168,7 +168,7 @@ template <typename WeakEnumType, size_t size>
     // Avoid:
     // policy/feerate.cpp:28:34: runtime error: signed integer overflow: 34873208148477500 * 1000 cannot be represented in type 'long'
     //
-    // Reproduce using CFeeRate(348732081484775, 10).GetFeePerK()
+    // Reproduce using CFeeRate(348732081484775, 10).GetFeeRate()
     const CAmount fee = std::min<CAmount>(ConsumeMoney(fuzzed_data_provider), std::numeric_limits<CAmount>::max() / static_cast<CAmount>(100000));
     assert(MoneyRange(fee));
     const int64_t time = fuzzed_data_provider.ConsumeIntegral<int64_t>();

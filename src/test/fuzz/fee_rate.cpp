@@ -19,7 +19,7 @@ FUZZ_TARGET(fee_rate)
     const CAmount satoshis_per_k = ConsumeMoney(fuzzed_data_provider);
     const CFeeRate fee_rate{satoshis_per_k};
 
-    (void)fee_rate.GetFeePerK();
+    (void)fee_rate.GetFeeRate();
     const auto bytes = fuzzed_data_provider.ConsumeIntegral<uint32_t>();
     if (!MultiplicationOverflow(int64_t{bytes}, satoshis_per_k)) {
         (void)fee_rate.GetFee(bytes);

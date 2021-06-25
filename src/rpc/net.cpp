@@ -647,8 +647,8 @@ static RPCHelpMan getnetworkinfo()
         obj.pushKV("connections_out", (int)node.connman->GetNodeCount(ConnectionDirection::Out));
     }
     obj.pushKV("networks",      GetNetworksInfo());
-    obj.pushKV("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK()));
-    obj.pushKV("incrementalfee", ValueFromAmount(::incrementalRelayFee.GetFeePerK()));
+    obj.pushKV("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeeRate()));
+    obj.pushKV("incrementalfee", ValueFromAmount(::incrementalRelayFee.GetFeeRate()));
     UniValue localAddresses(UniValue::VARR);
     {
         LOCK(cs_mapLocalHost);

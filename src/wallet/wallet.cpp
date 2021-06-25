@@ -2613,7 +2613,7 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain* chain, const std::st
         walletInstance->m_fallback_fee = CFeeRate(nFeePerK);
     }
     // Disable fallback fee in case value was set to 0, enable if non-null value
-    walletInstance->m_allow_fallback_fee = walletInstance->m_fallback_fee.GetFeePerK() != 0;
+    walletInstance->m_allow_fallback_fee = walletInstance->m_fallback_fee.GetFeeRate() != 0;
 
     if (gArgs.IsArgSet("-discardfee")) {
         CAmount nFeePerK = 0;
@@ -2662,7 +2662,7 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain* chain, const std::st
         walletInstance->m_default_max_tx_fee = nMaxFee;
     }
 
-    if (chain && chain->relayMinFee().GetFeePerK() > HIGH_TX_FEE_PER_KB) {
+    if (chain && chain->relayMinFee().GetFeeRate() > HIGH_TX_FEE_PER_KB) {
         warnings.push_back(AmountHighWarn("-minrelaytxfee") + Untranslated(" ") +
                            _("The wallet will avoid paying less than the minimum relay fee."));
     }
