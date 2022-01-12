@@ -278,6 +278,8 @@ BASE_SCRIPTS = [
     'wallet_create_tx.py --legacy-wallet',
     'wallet_send.py --legacy-wallet',
     'wallet_send.py --descriptors',
+    'wallet_sweep.py --legacy-wallet',
+    'wallet_sweep.py --descriptors',
     'wallet_create_tx.py --descriptors',
     'wallet_taproot.py',
     'p2p_fingerprint.py',
