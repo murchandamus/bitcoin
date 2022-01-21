@@ -192,7 +192,7 @@ void AvailableCoins(const CWallet& wallet, std::vector<COutput>& vCoins, const C
             bool spendable = ((mine & ISMINE_SPENDABLE) != ISMINE_NO) || (((mine & ISMINE_WATCH_ONLY) != ISMINE_NO) && (coinControl && coinControl->fAllowWatchOnly && solvable));
             int input_bytes = GetTxSpendSize(wallet, wtx, i, (coinControl && coinControl->fAllowWatchOnly));
 
-            vCoins.emplace_back(COutPoint(wtx.GetHash(), i), wtx.tx->vout.at(i), nDepth, input_bytes, spendable, solvable, safeTx, wtx.GetTxTime(), tx_from_me, feerate);
+            vCoins.emplace_back(COutPoint(wtx.GetHash(), i), wtx.tx->vout.at(i), nDepth, input_bytes, spendable, solvable, safeTx, wtx.GetTxTime(), tx_from_me, feerate, wallet.chain());
 
             // Checks the sum amount of all UTXO's.
             if (nMinimumSumAmount != MAX_MONEY) {
@@ -302,7 +302,7 @@ std::vector<OutputGroup> GroupOutputs(const CWallet& wallet, const std::vector<C
     std::vector<OutputGroup> groups_out;
 
     if (!coin_sel_params.m_avoid_partial_spends) {
-        // Allowing partial spends  means no grouping. Each COutput gets its own OutputGroup.
+        // Allowing partial spends means no grouping. Each COutput gets its own OutputGroup.
         for (const COutput& output : outputs) {
             // Skip outputs we cannot spend
             if (!output.spendable) continue;
@@ -482,7 +482,7 @@ std::optional<SelectionResult> SelectCoins(const CWallet& wallet, const std::vec
         }
 
         /* Set some defaults for depth, spendable, solvable, safe, time, and from_me as these don't matter for preset inputs since no selection is being done. */
-        COutput output(outpoint, txout, /*depth=*/ 0, input_bytes, /*spendable=*/ true, /*solvable=*/ true, /*safe=*/ true, /*time=*/ 0, /*from_me=*/ false, coin_selection_params.m_effective_feerate);
+        COutput output(outpoint, txout, /*depth=*/ 0, input_bytes, /*spendable=*/ true, /*solvable=*/ true, /*safe=*/ true, /*time=*/ 0, /*from_me=*/ false, coin_selection_params.m_effective_feerate, wallet.chain());
         if (coin_selection_params.m_subtract_fee_outputs) {
             value_to_select -= output.txout.nValue;
         } else {
@@ -833,7 +833,9 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     // and in the spirit of "smallest possible change from prior
     // behavior."
     const uint32_t nSequence{coin_control.m_signal_bip125_rbf.value_or(wallet.m_signal_rbf) ? MAX_BIP125_RBF_SEQUENCE : CTxIn::MAX_SEQUENCE_NONFINAL};
+    CAmount total_fees_for_bumping_ancestors{0};
     for (const auto& coin : selected_coins) {
+        total_fees_for_bumping_ancestors += coin.ancestor_bump_fees;
         txNew.vin.push_back(CTxIn(coin.outpoint, CScript(), nSequence));
     }
     DiscourageFeeSniping(txNew, rng_fast, wallet.chain(), wallet.GetLastBlockHash(), wallet.GetLastBlockHeight());
@@ -845,7 +847,8 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
         error = _("Missing solving data for estimating transaction size");
         return std::nullopt;
     }
-    nFeeRet = coin_selection_params.m_effective_feerate.GetFee(nBytes);
+    // TODO: Increase nFeeRet by amount necessary to auto-cpfp unconfirmed parents
+    nFeeRet = coin_selection_params.m_effective_feerate.GetFee(nBytes) + total_fees_for_bumping_ancestors;
 
     // Subtract fee from the change output if not subtracting it from recipient outputs
     CAmount fee_needed = nFeeRet;

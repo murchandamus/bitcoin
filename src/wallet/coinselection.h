@@ -6,11 +6,15 @@
 #define BITCOIN_WALLET_COINSELECTION_H
 
 #include <consensus/amount.h>
+#include <interfaces/chain.h>
 #include <policy/feerate.h>
 #include <primitives/transaction.h>
 #include <random.h>
 
 #include <optional>
+namespace interfaces{
+    class Chain;
+}
 
 namespace wallet {
 //! lower bound for randomly-chosen target change amount
@@ -21,10 +25,10 @@ static constexpr CAmount CHANGE_UPPER{1000000};
 /** A UTXO under consideration for use in funding a new transaction. */
 struct COutput {
 private:
-    /** The output's value minus fees required to spend it.*/
+    /** The output's value minus fees required to spend it and bump unconfirmed ancestors to the target feerate. */
     std::optional<CAmount> effective_value;
 
-    /** The fee required to spend this output at the transaction's target feerate. */
+    /** The fee required to spend this output at the transaction's target feerate, and bump its ancestors to the target feerate. */
     std::optional<CAmount> fee;
 
 public:
@@ -66,7 +70,10 @@ public:
     /** The fee required to spend this output at the consolidation feerate. */
     CAmount long_term_fee{0};
 
-    COutput(const COutPoint& outpoint, const CTxOut& txout, int depth, int input_bytes, bool spendable, bool solvable, bool safe, int64_t time, bool from_me, const std::optional<CFeeRate> feerate = std::nullopt)
+    /** The fee necessary to bump this UTXO's ancestor transactions to the target feerate */
+    CAmount ancestor_bump_fees{0};
+
+    COutput(const COutPoint& outpoint, const CTxOut& txout, int depth, int input_bytes, bool spendable, bool solvable, bool safe, int64_t time, bool from_me, const std::optional<CFeeRate> feerate = std::nullopt, const std::optional<std::reference_wrapper<interfaces::Chain>> chain_interface = std::nullopt)
         : outpoint{outpoint},
           txout{txout},
           depth{depth},
@@ -78,7 +85,23 @@ public:
           from_me{from_me}
     {
         if (feerate) {
+            // base fee without considering ancestors
             fee = input_bytes < 0 ? 0 : feerate.value().GetFee(input_bytes);
+            if (chain_interface && depth == 0) {
+                // Simplification: assume that all ancestors have lower feerates and no other descendants
+                std::optional<std::map<uint256, std::pair<CAmount, uint64_t>>> mining_score_map = chain_interface->get().getClusterMiningScores({outpoint.hash});
+                auto [ancestor_set_fee, ancestor_set_vsize] = mining_score_map.value()[outpoint.hash];
+
+                // void getTransactionAncestry(const uint256& txid, size_t& ancestors, size_t& descendants, size_t* ancestorsize, CAmount* ancestorfees) override
+                // std::optional<std::map<uint256, std::pair<CAmount, uint64_t>>> getClusterMiningScores(const std::vector<uint256>& txids) override
+                // TODO: Exclude ancestors that have a _higher mining score_ (i.e. own ancestor feerate or ancestor feerate in one of their descendants)
+                // TODO: HANDLE RELATED UNCONFIRMED INPUTS. This currently only gives the correct solution while we at most include a single unconfirmed input or unrelated unconfirmed inputs.
+                CAmount ancestor_target_fees = feerate->GetFee(ancestor_set_vsize); // Fees ancestors need to pay to have target feerate
+                if (ancestor_set_fee < ancestor_target_fees) { // bump only if ancestor txs have lower feerate
+                    ancestor_bump_fees = ancestor_target_fees - ancestor_set_fee;
+                    fee = fee.value() + ancestor_bump_fees;
+                }
+            }
             effective_value = txout.nValue - fee.value();
         }
     }
@@ -97,6 +120,15 @@ public:
     bool operator<(const COutput& rhs) const
     {
         return outpoint < rhs.outpoint;
+    }
+
+    // TODO: do we need the != and == operators?
+    bool operator!=(const COutput& rhs) const {
+        return outpoint != rhs.outpoint;
+    }
+
+    bool operator==(const COutput& rhs) const {
+        return outpoint == rhs.outpoint;
     }
 
     CAmount GetFee() const
