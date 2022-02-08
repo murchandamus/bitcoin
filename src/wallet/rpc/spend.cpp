@@ -71,6 +71,49 @@ static void ParseFeeEstimationInstructions(const UniValue& positional_conf_targe
     }
 }
 
+static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const UniValue& options, const CMutableTransaction& rawTx) {
+    bool add_to_wallet = options.exists("add_to_wallet") ? options["add_to_wallet"].get_bool() : true;
+
+    // Make a blank psbt
+    PartiallySignedTransaction psbtx(rawTx);
+
+    // First fill transaction with our data without signing,
+    // so external signers are not asked sign more than once.
+    bool complete;
+    pwallet->FillPSBT(psbtx, complete, SIGHASH_DEFAULT, false, true);
+    const TransactionError err = pwallet->FillPSBT(psbtx, complete, SIGHASH_DEFAULT, true, false);
+    if (err != TransactionError::OK) {
+        throw JSONRPCTransactionError(err);
+    }
+
+    CMutableTransaction mtx;
+    complete = FinalizeAndExtractPSBT(psbtx, mtx);
+
+    UniValue result(UniValue::VOBJ);
+
+    const bool psbt_opt_in = options.exists("psbt") && options["psbt"].get_bool();
+    if (psbt_opt_in || !complete || !add_to_wallet) {
+        // Serialize the PSBT
+        CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+        ssTx << psbtx;
+        result.pushKV("psbt", EncodeBase64(ssTx.str()));
+    }
+
+    if (complete) {
+        std::string hex = EncodeHexTx(CTransaction(mtx));
+        CTransactionRef tx(MakeTransactionRef(std::move(mtx)));
+        result.pushKV("txid", tx->GetHash().GetHex());
+        if (add_to_wallet && !psbt_opt_in) {
+            pwallet->CommitTransaction(tx, {}, {} /* orderForm */);
+        } else {
+            result.pushKV("hex", hex);
+        }
+    }
+    result.pushKV("complete", complete);
+
+    return result;
+}
+
 static void PreventOutdatedOptions(const UniValue& options) {
     if (options.exists("feeRate")) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Use fee_rate (" + CURRENCY_ATOM + "/vB) instead of feeRate");
@@ -1105,14 +1148,10 @@ RPCHelpMan send()
             ParseFeeEstimationInstructions(/*conf_target*/ request.params[1], /*estimate_mode*/ request.params[2], /*fee_rate*/ request.params[3], options);
             PreventOutdatedOptions(options);
 
-            const bool psbt_opt_in = options.exists("psbt") && options["psbt"].get_bool();
 
             CAmount fee;
             int change_position;
-            bool rbf = pwallet->m_signal_rbf;
-            if (options.exists("replaceable")) {
-                rbf = options["replaceable"].get_bool();
-            }
+            bool rbf = options.exists("replaceable") ? options["replaceable"].get_bool() : pwallet->m_signal_rbf;
             CMutableTransaction rawTx = ConstructTransaction(options["inputs"], request.params[0], options["locktime"], rbf);
             CCoinControl coin_control;
             // Automatically select coins, unless at least one is manually selected. Can
@@ -1120,49 +1159,7 @@ RPCHelpMan send()
             coin_control.m_add_inputs = rawTx.vin.size() == 0;
             FundTransaction(*pwallet, rawTx, fee, change_position, options, coin_control, /* override_min_fee */ false);
 
-            bool add_to_wallet = true;
-            if (options.exists("add_to_wallet")) {
-                add_to_wallet = options["add_to_wallet"].get_bool();
-            }
-
-            // Make a blank psbt
-            PartiallySignedTransaction psbtx(rawTx);
-
-            // First fill transaction with our data without signing,
-            // so external signers are not asked sign more than once.
-            bool complete;
-            pwallet->FillPSBT(psbtx, complete, SIGHASH_DEFAULT, false, true);
-            const TransactionError err = pwallet->FillPSBT(psbtx, complete, SIGHASH_DEFAULT, true, false);
-            if (err != TransactionError::OK) {
-                throw JSONRPCTransactionError(err);
-            }
-
-            CMutableTransaction mtx;
-            complete = FinalizeAndExtractPSBT(psbtx, mtx);
-
-            UniValue result(UniValue::VOBJ);
-
-            if (psbt_opt_in || !complete || !add_to_wallet) {
-                // Serialize the PSBT
-                CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
-                ssTx << psbtx;
-                result.pushKV("psbt", EncodeBase64(ssTx.str()));
-            }
-
-            if (complete) {
-                std::string err_string;
-                std::string hex = EncodeHexTx(CTransaction(mtx));
-                CTransactionRef tx(MakeTransactionRef(std::move(mtx)));
-                result.pushKV("txid", tx->GetHash().GetHex());
-                if (add_to_wallet && !psbt_opt_in) {
-                    pwallet->CommitTransaction(tx, {}, {} /* orderForm */);
-                } else {
-                    result.pushKV("hex", hex);
-                }
-            }
-            result.pushKV("complete", complete);
-
-            return result;
+            return FinishTransaction(pwallet, options, rawTx);
         }
     };
 }
