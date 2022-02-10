@@ -48,7 +48,6 @@ class SweepwalletTest(BitcoinTestFramework):
     def assert_tx_has_outputs(self, tx, expected_outputs):
         assert_equal(len(expected_outputs), len(tx["decoded"]["vout"]))
         for eo in expected_outputs:
-            # TODO: this would match the same output twice if expected_output specified two equivalent outputs
             self.assert_tx_has_output(tx, eo["address"], eo["value"])
 
     def add_uxtos(self, amounts):
@@ -129,6 +128,18 @@ class SweepwalletTest(BitcoinTestFramework):
                 "Must provide at least one address without a specified amount" ,
                 self.wallet.sweepwallet,
                 [{self.recipient: 5}]
+            )
+
+    @cleanup
+    def sweepwallet_duplicate_receiver(self):
+        self.log.info("Test sweeping with duplicate destination")
+        self.add_uxtos([1, 8, 3, 9])
+
+        assert_raises_rpc_error(
+                -8,
+                "Invalid parameter, duplicated address: {}".format(self.sweep_target),
+                self.wallet.sweepwallet,
+                [self.sweep_target, self.sweep_target]
             )
 
     @cleanup
@@ -251,6 +262,9 @@ class SweepwalletTest(BitcoinTestFramework):
 
         # Sweep fails if no receiver has unspecified amount
         self.sweepwallet_invalid_receiver_addresses()
+
+        # Sweep fails if same destination is provided twice
+        self.sweepwallet_duplicate_receiver()
 
         # Sweep fails when trying to spend more than the balance
         self.sweepwallet_invalid_amounts()
