@@ -22,7 +22,8 @@
 
 
 namespace wallet {
-static void ParseRecipients(const UniValue& address_amounts, const UniValue& subtract_fee_outputs, std::vector<CRecipient> &recipients) {
+static void ParseRecipients(const UniValue& address_amounts, const UniValue& subtract_fee_outputs, std::vector<CRecipient> &recipients)
+{
     std::set<CTxDestination> destinations;
     int i = 0;
     for (const std::string& address: address_amounts.getKeys()) {
@@ -52,7 +53,8 @@ static void ParseRecipients(const UniValue& address_amounts, const UniValue& sub
     }
 }
 
-static void ParseFeeEstimationInstructions(const UniValue& positional_conf_target, const UniValue& positional_estimate_mode, const UniValue& positional_fee_rate, UniValue& options) {
+static void ParseFeeEstimationInstructions(const UniValue& positional_conf_target, const UniValue& positional_estimate_mode, const UniValue& positional_fee_rate, UniValue& options)
+{
     if (options.exists("conf_target") || options.exists("estimate_mode")) {
         if (!positional_conf_target.isNull() || !positional_estimate_mode.isNull()) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Pass conf_target and estimate_mode either as arguments or in the options object, but not both");
@@ -73,9 +75,8 @@ static void ParseFeeEstimationInstructions(const UniValue& positional_conf_targe
     }
 }
 
-static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const UniValue& options, const CMutableTransaction& rawTx) {
-    bool add_to_wallet = options.exists("add_to_wallet") ? options["add_to_wallet"].get_bool() : true;
-
+static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const UniValue& options, const CMutableTransaction& rawTx)
+{
     // Make a blank psbt
     PartiallySignedTransaction psbtx(rawTx);
 
@@ -93,7 +94,8 @@ static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const 
 
     UniValue result(UniValue::VOBJ);
 
-    const bool psbt_opt_in = options.exists("psbt") && options["psbt"].get_bool();
+    const bool psbt_opt_in{options.exists("psbt") && options["psbt"].get_bool()};
+    bool add_to_wallet{options.exists("add_to_wallet") ? options["add_to_wallet"].get_bool() : true};
     if (psbt_opt_in || !complete || !add_to_wallet) {
         // Serialize the PSBT
         CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
@@ -116,7 +118,8 @@ static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const 
     return result;
 }
 
-static void PreventOutdatedOptions(const UniValue& options) {
+static void PreventOutdatedOptions(const UniValue& options)
+{
     if (options.exists("feeRate")) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Use fee_rate (" + CURRENCY_ATOM + "/vB) instead of feeRate");
     }
@@ -1159,7 +1162,7 @@ RPCHelpMan send()
             if (!pwallet) return NullUniValue;
 
             UniValue options{request.params[4].isNull() ? UniValue::VOBJ : request.params[4]};
-            ParseFeeEstimationInstructions(/*conf_target*/ request.params[1], /*estimate_mode*/ request.params[2], /*fee_rate*/ request.params[3], options);
+            ParseFeeEstimationInstructions(/*conf_target=*/ request.params[1], /*estimate_mode=*/ request.params[2], /*fee_rate=*/ request.params[3], options);
             PreventOutdatedOptions(options);
 
 
@@ -1185,7 +1188,7 @@ RPCHelpMan sweepwallet()
         "\nSpend all (or specific) confirmed UTXOs in the wallet to one or more recipients.\n"
         "Unconfirmed inbound UTXOs and locked UTXOs will not be spent. Sweepwallet will respect the wallet flag for avoid_reuse.\n",
         {
-            {"receivers", RPCArg::Type::ARR, RPCArg::Optional::NO, "The destinations of the sweep, each address may only appear once.\n"
+            {"receivers", RPCArg::Type::ARR, RPCArg::Optional::NO, "The sweep destinations. Each address may only appear once.\n"
                 "Optionally some receivers can be specified with an amount, but at least one address must appear without a specified amount.\n",
                 {
                     {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "A bitcoin address which receives an equal share of the unspecified amount."},
@@ -1209,7 +1212,7 @@ RPCHelpMan sweepwallet()
                         {"include_watching", RPCArg::Type::BOOL, RPCArg::DefaultHint{"true for watch-only wallets, otherwise false"}, "Also select inputs which are watch only.\n"
                                               "Only solvable inputs can be used. Watch-only destinations are solvable if the public key and/or output script was imported,\n"
                                               "e.g. with 'importpubkey' or 'importmulti' with the 'pubkeys' or 'desc' field."},
-                        {"inputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "Use exactly the specified inputs to build the transaction. Specifying inputs is incompatible with sendmax. A JSON array of JSON objects",
+                        {"inputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "Use exactly the specified inputs to build the transaction. Specifying inputs is incompatible with send_max. A JSON array of JSON objects",
                             {
                                 {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
                                 {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
@@ -1219,7 +1222,7 @@ RPCHelpMan sweepwallet()
                         {"locktime", RPCArg::Type::NUM, RPCArg::Default{0}, "Raw locktime. Non-0 value also locktime-activates inputs"},
                         {"lock_unspents", RPCArg::Type::BOOL, RPCArg::Default{false}, "Lock selected unspent outputs"},
                         {"psbt", RPCArg::Type::BOOL,  RPCArg::DefaultHint{"automatic"}, "Always return a PSBT, implies add_to_wallet=false."},
-                        {"sendmax", RPCArg::Type::BOOL, RPCArg::Default{false}, "When true, only sweep UTXOs that can pay for their own fees to maximize the output amount. When 'false' (default), no UTXO is left behind. Sendmax is incompatible with providing specific inputs."},
+                        {"send_max", RPCArg::Type::BOOL, RPCArg::Default{false}, "When true, only sweep UTXOs that can pay for their own fees to maximize the output amount. When 'false' (default), no UTXO is left behind. send_max is incompatible with providing specific inputs."},
                     },
                     FundTxDoc()
                 ),
@@ -1243,7 +1246,7 @@ RPCHelpMan sweepwallet()
         "Sweep all UTXOs split into equal amounts to two addresses with a fee rate of 1.5 " + CURRENCY_ATOM + "/vB using the options argument\n"
         + HelpExampleCli("sweepwallet", "'[\"" + EXAMPLE_ADDRESS[0] + "\", \"" + EXAMPLE_ADDRESS[1] + "\"]' null \"unset\" null '{\"fee_rate\": 1.5}'\n") +
         "Leave dust UTXOs in wallet, sweep only UTXOs with positive effective value with a fee rate of 10 " + CURRENCY_ATOM + "/vB using the options argument\n"
-        + HelpExampleCli("sweepwallet", "'[\"" + EXAMPLE_ADDRESS[0] + "\"]' null \"unset\" null '{\"fee_rate\": 10, \"sendmax\": true}'\n") +
+        + HelpExampleCli("sweepwallet", "'[\"" + EXAMPLE_ADDRESS[0] + "\"]' null \"unset\" null '{\"fee_rate\": 10, \"send_max\": true}'\n") +
         "Sweep all UTXOs with a fee rate of 1.3 " + CURRENCY_ATOM + "/vB using named arguments and sending a 0.25 " + CURRENCY_UNIT + " to another recipient\n"
         + HelpExampleCli("-named sweepwallet", "receivers='[{\"" + EXAMPLE_ADDRESS[1] + "\": 0.25}, \""+ EXAMPLE_ADDRESS[0] + "\"]' fee_rate=1.3\n")
         },
@@ -1262,7 +1265,7 @@ RPCHelpMan sweepwallet()
             if (!pwallet) return NullUniValue;
 
             UniValue options{request.params[4].isNull() ? UniValue::VOBJ : request.params[4]};
-            ParseFeeEstimationInstructions(/*conf_target*/ request.params[1], /*estimate_mode*/ request.params[2], /*fee_rate*/ request.params[3], options);
+            ParseFeeEstimationInstructions(/*conf_target=*/ request.params[1], /*estimate_mode=*/ request.params[2], /*fee_rate=*/ request.params[3], options);
             PreventOutdatedOptions(options);
 
 
@@ -1296,7 +1299,7 @@ RPCHelpMan sweepwallet()
                 lock_unspents = options["lock_unspents"].get_bool();
             }
 
-            bool rbf = options.exists("replaceable") ? options["replaceable"].get_bool() : pwallet->m_signal_rbf;
+            bool rbf{options.exists("replaceable") ? options["replaceable"].get_bool() : pwallet->m_signal_rbf}
 
             FeeCalculation fee_calc_out;
             CFeeRate fee_rate = GetMinimumFeeRate(*pwallet, coin_control, &fee_calc_out);
@@ -1315,9 +1318,9 @@ RPCHelpMan sweepwallet()
             std::vector<COutput> all_the_utxos;
 
             CAmount total_input_value(0);
-            bool sendmax = options.exists("sendmax") && options["sendmax"].get_bool();
-            if (options.exists("inputs") && options.exists("sendmax")) {
-                throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot combine sendmax with specific inputs.");
+            bool send_max{options.exists("send_max") && options["send_max"].get_bool()};
+            if (options.exists("inputs") && options.exists("send_max")) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot combine send_max with specific inputs.");
             } else if (options.exists("inputs")) {
                 for (const CTxIn& input : rawTx.vin) {
                     if (pwallet->IsSpent(input.prevout.hash, input.prevout.n)) {
@@ -1333,7 +1336,7 @@ RPCHelpMan sweepwallet()
                 AvailableCoins(*pwallet, all_the_utxos, &coin_control, /* sweep 0-value utxos*/ 0);
                 for (const COutput& output : all_the_utxos) {
                     CHECK_NONFATAL(output.nInputBytes > 0);
-                    if (sendmax && fee_rate.GetFee(output.nInputBytes) > output.tx->tx->vout[output.i].nValue) {
+                    if (send_max && fee_rate.GetFee(output.nInputBytes) > output.tx->tx->vout[output.i].nValue) {
                         continue;
                     }
                     CTxIn input(output.tx->GetHash(), output.i, CScript(), rbf ? MAX_BIP125_RBF_SEQUENCE : CTxIn::SEQUENCE_FINAL);
@@ -1348,10 +1351,10 @@ RPCHelpMan sweepwallet()
             CAmount effective_value = total_input_value - fee_from_size;
 
             if (effective_value <= 0) {
-                if (sendmax) {
+                if (send_max) {
                     throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Total value of UTXO pool too low to pay for sweep, try using lower feerate.");
                 } else {
-                    throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Total value of UTXO pool too low to pay for sweep. Try using lower feerate or excluding uneconomic UTXOs with 'sendmax' option.");
+                    throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Total value of UTXO pool too low to pay for sweep. Try using lower feerate or excluding uneconomic UTXOs with 'send_max' option.");
                 }
             }
 

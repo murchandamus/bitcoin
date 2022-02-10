@@ -118,16 +118,16 @@ class SweepwalletTest(BitcoinTestFramework):
 
         dust_wallet.unloadwallet()
 
-    def sweepwallet_with_sendmax(self):
-        self.log.info("Check that `sendmax` option causes negative value UTXOs to be left behind")
+    def sweepwallet_with_send_max(self):
+        self.log.info("Check that `send_max` option causes negative value UTXOs to be left behind")
         self.def_wallet.sendtoaddress(self.wallet.getnewaddress(), 0.00000400)
         self.def_wallet.sendtoaddress(self.wallet.getnewaddress(), 0.00000300)
         self.def_wallet.sendtoaddress(self.wallet.getnewaddress(), 1)
         self.generate(self.nodes[0], 1)
         assert_greater_than(self.wallet.getbalances()["mine"]["trusted"], 0)
 
-        # Sweep with sendmax
-        sweep_tx_receipt = self.wallet.sweepwallet(receivers=[self.return_addr_remainder], fee_rate=300, options={"sendmax": True})
+        # Sweep with send_max
+        sweep_tx_receipt = self.wallet.sweepwallet(receivers=[self.return_addr_remainder], fee_rate=300, options={"send_max": True})
         tx_from_wallet = self.wallet.gettransaction(txid = sweep_tx_receipt["txid"], verbose = True)
 
         assert_equal(len(tx_from_wallet["decoded"]["vin"]), 1)
@@ -216,7 +216,7 @@ class SweepwalletTest(BitcoinTestFramework):
         self.sweepwallet_negative_effective_value()
 
         # Sweep fails when wallet has no economically spendable UTXOs
-        self.sweepwallet_with_sendmax()
+        self.sweepwallet_with_send_max()
 
         # Sweep succeeds with specific inputs
         self.sweepwallet_specific_inputs()
