@@ -162,7 +162,7 @@ class SweepwalletTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 1)
         assert_greater_than(dust_wallet.getbalances()["mine"]["trusted"], 0)
 
-        assert_raises_rpc_error(-6, "Total value of UTXO pool too low to pay for sweep. Try using lower feerate or excluding uneconomic UTXOs with 'sendmax' option.", dust_wallet.sweepwallet, receivers=[self.sweep_target], fee_rate=300)
+        assert_raises_rpc_error(-6, "Total value of UTXO pool too low to pay for sweep. Try using lower feerate or excluding uneconomic UTXOs with 'send_max' option.", dust_wallet.sweepwallet, receivers=[self.sweep_target], fee_rate=300)
 
         dust_wallet.unloadwallet()
 
@@ -176,8 +176,7 @@ class SweepwalletTest(BitcoinTestFramework):
         tx_from_wallet = self.wallet.gettransaction(txid = sweep_tx_receipt["txid"], verbose = True)
 
         assert_equal(len(tx_from_wallet["decoded"]["vin"]), 1)
-        assert_equal(len(tx_from_wallet["decoded"]["vout"]), 1)
-        self.assert_tx_has_output(tx_from_wallet, self.sweep_target)
+        self.assert_tx_has_outputs(tx_from_wallet, [{"address": self.sweep_target, "value": 1 + tx_from_wallet["fee"]}])
         assert_equal(self.wallet.getbalances()["mine"]["trusted"], Decimal("0.00000700"))
 
         self.def_wallet.sendtoaddress(self.wallet.getnewaddress(), 1)
