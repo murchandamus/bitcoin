@@ -1290,16 +1290,11 @@ RPCHelpMan sweepwallet()
 
             CCoinControl coin_control;
 
-            SetFeeEstimateMode(*pwallet, coin_control, options["conf_target"], options["estimate_mode"], options["fee_rate"], /* override_min_fee */ false);
+            SetFeeEstimateMode(*pwallet, coin_control, options["conf_target"], options["estimate_mode"], options["fee_rate"], /*override_min_fee=*/false);
 
             coin_control.fAllowWatchOnly = ParseIncludeWatchonly(options["include_watching"], *pwallet);
 
-            bool lock_unspents = false;
-            if (options.exists("lock_unspents")) {
-                lock_unspents = options["lock_unspents"].get_bool();
-            }
-
-            bool rbf{options.exists("replaceable") ? options["replaceable"].get_bool() : pwallet->m_signal_rbf}
+            const bool rbf{options.exists("replaceable") ? options["replaceable"].get_bool() : pwallet->m_signal_rbf}
 
             FeeCalculation fee_calc_out;
             CFeeRate fee_rate = GetMinimumFeeRate(*pwallet, coin_control, &fee_calc_out);
@@ -1358,7 +1353,7 @@ RPCHelpMan sweepwallet()
                 }
             }
 
-            CAmount output_amounts_claimed(0);
+            CAmount output_amounts_claimed{0};
             for (CTxOut out : rawTx.vout) {
                 output_amounts_claimed += out.nValue;
             }
@@ -1367,7 +1362,7 @@ RPCHelpMan sweepwallet()
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Assigned more value to outputs than available funds.");
             }
 
-            CAmount remainder = effective_value - output_amounts_claimed;
+            CAmount remainder{effective_value - output_amounts_claimed};
             if (remainder < 0) {
                 throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds for fees after creating specified outputs.");
             }
@@ -1397,6 +1392,7 @@ RPCHelpMan sweepwallet()
                 }
             }
 
+            const bool lock_unspents{options.exists("lock_unspents") ? options["lock_unspents"].get_bool() : false};
             if (lock_unspents) {
                 for (const CTxIn& txin : rawTx.vin) {
                     pwallet->LockCoin(txin.prevout);
