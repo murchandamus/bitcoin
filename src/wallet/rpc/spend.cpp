@@ -84,7 +84,7 @@ static UniValue FinishTransaction(const std::shared_ptr<CWallet> pwallet, const 
     // so external signers are not asked sign more than once.
     bool complete;
     pwallet->FillPSBT(psbtx, complete, SIGHASH_DEFAULT, false, true);
-    const TransactionError err = pwallet->FillPSBT(psbtx, complete, SIGHASH_DEFAULT, true, false);
+    const TransactionError err{pwallet->FillPSBT(psbtx, complete, SIGHASH_DEFAULT, true, false)};
     if (err != TransactionError::OK) {
         throw JSONRPCTransactionError(err);
     }
@@ -1294,7 +1294,7 @@ RPCHelpMan sweepwallet()
 
             coin_control.fAllowWatchOnly = ParseIncludeWatchonly(options["include_watching"], *pwallet);
 
-            const bool rbf{options.exists("replaceable") ? options["replaceable"].get_bool() : pwallet->m_signal_rbf}
+            const bool rbf{options.exists("replaceable") ? options["replaceable"].get_bool() : pwallet->m_signal_rbf};
 
             FeeCalculation fee_calc_out;
             CFeeRate fee_rate = GetMinimumFeeRate(*pwallet, coin_control, &fee_calc_out);
