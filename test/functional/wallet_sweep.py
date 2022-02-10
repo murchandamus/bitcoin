@@ -57,6 +57,16 @@ class SweepwalletTest(BitcoinTestFramework):
         assert_greater_than(self.wallet.getbalances()["mine"]["trusted"], 0)
         return self.wallet.getbalances()["mine"]["trusted"]
 
+    # Helper schema for success cases
+    def test_sweepwallet_success(self, sweepwallet_args, remaining_balance = 0):
+        sweep_tx_receipt = self.wallet.sweepwallet(sweepwallet_args)
+        self.generate(self.nodes[0], 1)
+        # wallet has remaining balance (usually empty)
+        assert_equal(remaining_balance, self.wallet.getbalances()["mine"]["trusted"])
+
+        assert_equal(sweep_tx_receipt["complete"], True)
+        return self.wallet.gettransaction(txid = sweep_tx_receipt["txid"], verbose = True)
+
     @cleanup
     def gen_and_clean(self):
         self.add_uxtos([15, 2, 4])
@@ -66,21 +76,11 @@ class SweepwalletTest(BitcoinTestFramework):
         self.gen_and_clean()
         assert_equal(0, self.wallet.getbalances()["mine"]["trusted"]) # wallet is empty
 
-    # Helper schema for success cases
-    def test_sweepwallet_success(self, sweepwallet_args, remaining_balance = 0):
-        sweep_tx_receipt = self.wallet.sweepwallet(sweepwallet_args)
-        self.generate(self.nodes[0], 1)
-        # wallet has remaining balance (usually empty
-        assert_equal(remaining_balance, self.wallet.getbalances()["mine"]["trusted"])
-
-        assert_equal(sweep_tx_receipt["complete"], True)
-        return self.wallet.gettransaction(txid = sweep_tx_receipt["txid"], verbose = True)
-
 # Actual tests
     @cleanup
     def sweepwallet_two_utxos(self):
         self.log.info("Testing basic sweep case without specific amounts")
-        initial_balance = self.add_uxtos([10,11])
+        pre_sweep_balance = self.add_uxtos([10,11])
         tx_from_wallet = self.test_sweepwallet_success(sweepwallet_args = [self.sweep_target])
 
         self.assert_tx_has_outputs(tx = tx_from_wallet,
@@ -88,35 +88,36 @@ class SweepwalletTest(BitcoinTestFramework):
                 { "address": self.sweep_target, "value": initial_balance + tx_from_wallet["fee"] } # fee is neg
             ]
         )
+        self.assert_balance_swept_completely(tx_from_wallet, pre_sweep_balance)
 
     @cleanup
     def sweepwallet_split(self):
         self.log.info("Testing sweep where two recipients have unspecified amount")
-        wallet_balance_before_sweep = self.add_uxtos([1, 2, 3, 15])
+        pre_sweep_balance = self.add_uxtos([1, 2, 3, 15])
         tx_from_wallet = self.test_sweepwallet_success([self.sweep_target, self.split_target])
 
-        half = (wallet_balance_before_sweep + tx_from_wallet["fee"]) / 2
+        half = (pre_sweep_balance + tx_from_wallet["fee"]) / 2
         self.assert_tx_has_outputs(tx_from_wallet,
             expected_outputs = [
                 { "address": self.split_target, "value": half },
                 { "address": self.sweep_target, "value": half }
             ]
         )
-        self.assert_balance_swept_completely(tx_from_wallet, wallet_balance_before_sweep)
+        self.assert_balance_swept_completely(tx_from_wallet, pre_sweep_balance)
 
     @cleanup
     def sweepwallet_and_spend(self):
         self.log.info("Testing sweep where one output has specified amount")
-        wallet_balance_before_sweep = self.add_uxtos([8, 13])
+        pre_sweep_balance = self.add_uxtos([8, 13])
         tx_from_wallet = self.test_sweepwallet_success([{self.recipient: 5}, self.sweep_target])
 
         self.assert_tx_has_outputs(tx_from_wallet,
             expected_outputs = [
                 { "address": self.recipient, "value": 5 },
-                { "address": self.sweep_target, "value": wallet_balance_before_sweep - 5 + tx_from_wallet["fee"] }
+                { "address": self.sweep_target, "value": pre_sweep_balance - 5 + tx_from_wallet["fee"] }
             ]
         )
-        self.assert_balance_swept_completely(tx_from_wallet, wallet_balance_before_sweep)
+        self.assert_balance_swept_completely(tx_from_wallet, pre_sweep_balance)
 
     @cleanup
     def sweepwallet_invalid_receiver_addresses(self):
@@ -145,23 +146,24 @@ class SweepwalletTest(BitcoinTestFramework):
     @cleanup
     def sweepwallet_invalid_amounts(self):
         self.log.info("Try sweeping more than balance")
-        wallet_balance_before_sweep = self.add_uxtos([7, 14])
+        pre_sweep_balance = self.add_uxtos([7, 14])
 
         expected_tx = self.wallet.sweepwallet(receivers=[{self.recipient: 5}, self.sweep_target], options={"add_to_wallet": False})
         tx = self.wallet.decoderawtransaction(expected_tx['hex'])
         fee = 21 - sum([o["value"] for o in tx["vout"]])
 
         assert_raises_rpc_error(-8, "Assigned more value to outputs than available funds.", self.wallet.sweepwallet,
-                [ {self.recipient: wallet_balance_before_sweep + 1}, self.sweep_target ])
+                [ {self.recipient: pre_sweep_balance + 1}, self.sweep_target ])
         assert_raises_rpc_error(-6, "Insufficient funds for fees after creating specified outputs.", self.wallet.sweepwallet,
-                [{self.recipient: wallet_balance_before_sweep}, self.sweep_target])
+                [{self.recipient: pre_sweep_balance}, self.sweep_target])
         assert_raises_rpc_error(-8, "Specified output amount to {} is below dust threshold".format(self.recipient),
                 self.wallet.sweepwallet, [{self.recipient: 0.00000001}, self.sweep_target])
         assert_raises_rpc_error(-6, "Dynamically assigned remainder results in dust output.", self.wallet.sweepwallet,
-                [{self.recipient: wallet_balance_before_sweep - fee}, self.sweep_target])
+                [{self.recipient: pre_sweep_balance - fee}, self.sweep_target])
         assert_raises_rpc_error(-6, "Dynamically assigned remainder results in dust output.", self.wallet.sweepwallet,
-                [{self.recipient: wallet_balance_before_sweep - fee - Decimal(0.00000010)}, self.sweep_target])
+                [{self.recipient: pre_sweep_balance - fee - Decimal(0.00000010)}, self.sweep_target])
 
+    # @cleanup not needed because different wallet used
     def sweepwallet_negative_effective_value(self):
         self.log.info("Check that sweep fails if all UTXOs have negative effective value")
         # Use dedicated wallet for dust amounts and unload wallet at end
