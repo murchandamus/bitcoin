@@ -398,6 +398,10 @@ std::optional<SelectionResult> AttemptSelection(const CWallet& wallet, const CAm
         srd_result->ComputeAndSetWaste(coin_selection_params.m_cost_of_change);
         results.push_back(*srd_result);
     }
+    if (auto fifo_result{SelectCoinsFIFO(positive_groups, srd_target)}) {
+        fifo_result->ComputeAndSetWaste(coin_selection_params.m_cost_of_change);
+        results.push_back(*fifo_result);
+    }
 
     if (results.size() == 0) {
         // No solution found

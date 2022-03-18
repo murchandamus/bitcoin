@@ -169,6 +169,24 @@ std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_poo
     return result;
 }
 
+std::optional<SelectionResult> SelectCoinsFIFO(std::vector<OutputGroup>& utxo_pool, CAmount target_value)
+{
+    SelectionResult result(target_value);
+
+    std::sort(utxo_pool.begin(), utxo_pool.end(), [](const OutputGroup& a, const OutputGroup& b) { return a.m_depth > b.m_depth; });
+
+    CAmount selected_eff_value = 0;
+    for (const OutputGroup& group : utxo_pool) {
+        Assume(group.GetSelectionAmount() > 0);
+        selected_eff_value += group.GetSelectionAmount();
+        result.AddInput(group);
+        if (selected_eff_value >= target_value) {
+            return result;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value)
 {
     SelectionResult result(target_value);

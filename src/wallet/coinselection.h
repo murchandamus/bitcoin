@@ -239,6 +239,15 @@ public:
 
 std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CAmount& cost_of_change);
 
+/** Select coins by oldest first. OutputGroups are selected by the lowest
+ * minimum m_depth from the eligible outputs until the target is satisfied
+ *
+ * @param[in]  utxo_pool    The positive effective value OutputGroups eligible for selection
+ * @param[in]  target_value The target value to select for
+ * @returns If successful, a SelectionResult, otherwise, std::nullopt
+ */
+std::optional<SelectionResult> SelectCoinsFIFO(std::vector<OutputGroup>& utxo_pool, CAmount target_value);
+
 /** Select coins by Single Random Draw. OutputGroups are selected randomly from the eligible
  * outputs until the target is satisfied
  *
