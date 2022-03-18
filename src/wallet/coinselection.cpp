@@ -209,122 +209,50 @@ std::optional<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& ut
     return std::nullopt;
 }
 
-static void ApproximateBestSubset(const std::vector<OutputGroup>& groups, const CAmount& nTotalLower, const CAmount& nTargetValue,
-                                  std::vector<char>& vfBest, CAmount& nBest, int iterations = 1000)
+std::optional<SelectionResult> SelectCoinsBlackjack(std::vector<OutputGroup>& groups, const CAmount& nTargetValue)
 {
-    std::vector<char> vfIncluded;
+    SelectionResult result(nTargetValue);
+    std::sort(groups.begin(), groups.end(), descending);
 
-    vfBest.assign(groups.size(), true);
-    nBest = nTotalLower;
+    CAmount nTotal = 0;
+    std::optional<size_t> add_last;
+    for (unsigned int i = 0; i < groups.size(); i++) {
+        nTotal += groups[i].GetSelectionAmount();
+        if (nTotal < nTargetValue) {
+            // Only select UTXOs that keep us below the target
+            result.AddInput(groups[i]);
+        } else {
+            // Remember the last UTXO that would have gotten us past the target
+            add_last = i;
 
-    FastRandomContext insecure_rand;
-
-    for (int nRep = 0; nRep < iterations && nBest != nTargetValue; nRep++)
-    {
-        vfIncluded.assign(groups.size(), false);
-        CAmount nTotal = 0;
-        bool fReachedTarget = false;
-        for (int nPass = 0; nPass < 2 && !fReachedTarget; nPass++)
-        {
-            for (unsigned int i = 0; i < groups.size(); i++)
-            {
-                //The solver here uses a randomized algorithm,
-                //the randomness serves no real security purpose but is just
-                //needed to prevent degenerate behavior and it is important
-                //that the rng is fast. We do not use a constant random sequence,
-                //because there may be some privacy improvement by making
-                //the selection random.
-                if (nPass == 0 ? insecure_rand.randbool() : !vfIncluded[i])
-                {
-                    nTotal += groups[i].GetSelectionAmount();
-                    vfIncluded[i] = true;
-                    if (nTotal >= nTargetValue)
-                    {
-                        fReachedTarget = true;
-                        if (nTotal < nBest)
-                        {
-                            nBest = nTotal;
-                            vfBest = vfIncluded;
-                        }
-                        nTotal -= groups[i].GetSelectionAmount();
-                        vfIncluded[i] = false;
-                    }
-                }
-            }
+            // but skip UTXOs that take us past the target
+            nTotal -= groups[i].GetSelectionAmount();
         }
     }
+
+    if (add_last.has_value()) {
+        result.AddInput(groups[add_last.value()]);
+        return result;
+    }
+
+    return std::nullopt;
 }
 
 std::optional<SelectionResult> KnapsackSolver(std::vector<OutputGroup>& groups, const CAmount& nTargetValue)
 {
     SelectionResult result(nTargetValue);
 
-    // List of values less than target
-    std::optional<OutputGroup> lowest_larger;
-    std::vector<OutputGroup> applicable_groups;
-    CAmount nTotalLower = 0;
-
-    Shuffle(groups.begin(), groups.end(), FastRandomContext());
+    std::sort(groups.begin(), groups.end(), descending);
+    std::reverse(groups.begin(), groups.end());
 
     for (const OutputGroup& group : groups) {
-        if (group.GetSelectionAmount() == nTargetValue) {
+        if (group.GetSelectionAmount() >= nTargetValue) {
             result.AddInput(group);
             return result;
-        } else if (group.GetSelectionAmount() < nTargetValue + MIN_CHANGE) {
-            applicable_groups.push_back(group);
-            nTotalLower += group.GetSelectionAmount();
-        } else if (!lowest_larger || group.GetSelectionAmount() < lowest_larger->GetSelectionAmount()) {
-            lowest_larger = group;
         }
     }
 
-    if (nTotalLower == nTargetValue) {
-        for (const auto& group : applicable_groups) {
-            result.AddInput(group);
-        }
-        return result;
-    }
-
-    if (nTotalLower < nTargetValue) {
-        if (!lowest_larger) return std::nullopt;
-        result.AddInput(*lowest_larger);
-        return result;
-    }
-
-    // Solve subset sum by stochastic approximation
-    std::sort(applicable_groups.begin(), applicable_groups.end(), descending);
-    std::vector<char> vfBest;
-    CAmount nBest;
-
-    ApproximateBestSubset(applicable_groups, nTotalLower, nTargetValue, vfBest, nBest);
-    if (nBest != nTargetValue && nTotalLower >= nTargetValue + MIN_CHANGE) {
-        ApproximateBestSubset(applicable_groups, nTotalLower, nTargetValue + MIN_CHANGE, vfBest, nBest);
-    }
-
-    // If we have a bigger coin and (either the stochastic approximation didn't find a good solution,
-    //                                   or the next bigger coin is closer), return the bigger coin
-    if (lowest_larger &&
-        ((nBest != nTargetValue && nBest < nTargetValue + MIN_CHANGE) || lowest_larger->GetSelectionAmount() <= nBest)) {
-        result.AddInput(*lowest_larger);
-    } else {
-        for (unsigned int i = 0; i < applicable_groups.size(); i++) {
-            if (vfBest[i]) {
-                result.AddInput(applicable_groups[i]);
-            }
-        }
-
-        if (LogAcceptCategory(BCLog::SELECTCOINS)) {
-            std::string log_message{"Coin selection best subset: "};
-            for (unsigned int i = 0; i < applicable_groups.size(); i++) {
-                if (vfBest[i]) {
-                    log_message += strprintf("%s ", FormatMoney(applicable_groups[i].m_value));
-                }
-            }
-            LogPrint(BCLog::SELECTCOINS, "%stotal %s\n", log_message, FormatMoney(nBest));
-        }
-    }
-
-    return result;
+    return std::nullopt;
 }
 
 /******************************************************************************

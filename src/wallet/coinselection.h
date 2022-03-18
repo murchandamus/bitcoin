@@ -257,6 +257,9 @@ std::optional<SelectionResult> SelectCoinsFIFO(std::vector<OutputGroup>& utxo_po
  */
 std::optional<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value);
 
+// Never overshoot target but fill the gap with sand
+std::optional<SelectionResult> SelectCoinsBlackjack(std::vector<OutputGroup>& groups, const CAmount& nTargetValue);
+
 // Original coin selection algorithm as a fallback
 std::optional<SelectionResult> KnapsackSolver(std::vector<OutputGroup>& groups, const CAmount& nTargetValue);
 } // namespace wallet
