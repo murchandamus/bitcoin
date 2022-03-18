@@ -81,6 +81,11 @@ struct COutput {
 
     bool operator<(const COutput& rhs) const
     {
+        if (effective_value && rhs.effective_value) {
+            if (effective_value != rhs.effective_value) {
+                return effective_value < rhs.effective_value;
+            }
+        }
         return outpoint < rhs.outpoint;
     }
 };
@@ -244,7 +249,8 @@ enum class SelectionAlgorithm : uint8_t
     BNB = 0,
     KNAPSACK = 1,
     SRD = 2,
-    MANUAL = 3,
+    SRDLTD = 3,
+    MANUAL = 4,
 };
 
 std::string GetAlgorithmName(const SelectionAlgorithm algo);
@@ -273,9 +279,13 @@ public:
     /** Get the sum of the input values */
     [[nodiscard]] CAmount GetSelectedValue() const;
 
+    /** Get the sum of the inputs' effective values */
+    [[nodiscard]] CAmount GetSelectedEffectiveValue() const;
+
     void Clear();
 
     void AddInput(const OutputGroup& group);
+    CAmount AddIfBetterInput(const OutputGroup& group, size_t limit);
 
     /** Calculates and stores the waste for this selection via GetSelectionWaste */
     void ComputeAndSetWaste(CAmount change_cost);
@@ -291,7 +301,20 @@ public:
 
 std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CAmount& cost_of_change);
 
-/** Select coins by Single Random Draw. OutputGroups are selected randomly from the eligible
+/**
+ * Select coins by Single Random Draw with limited input count. OutputGroups
+ * are selected randomly from the eligible outputs until the target is
+ * satisfied
+ *
+ * @param[in]  utxo_pool    The positive effective value OutputGroups eligible for selection
+ * @param[in]  target_value The target value to select for
+ * @param[in]  feerate      The target feerate to select for
+ * @returns If successful, a SelectionResult, otherwise, std::nullopt
+ */
+std::optional<SelectionResult> SelectCoinsSRDLTD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value, FastRandomContext& rng, CFeeRate feerate);
+
+/**
+ * Select coins by Single Random Draw. OutputGroups are selected randomly from the eligible
  * outputs until the target is satisfied
  *
  * @param[in]  utxo_pool    The positive effective value OutputGroups eligible for selection

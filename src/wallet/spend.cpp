@@ -407,6 +407,10 @@ std::optional<SelectionResult> AttemptSelection(const CWallet& wallet, const CAm
         srd_result->ComputeAndSetWaste(coin_selection_params.m_cost_of_change);
         results.push_back(*srd_result);
     }
+    if (auto srdltd_result{SelectCoinsSRDLTD(positive_groups, srd_target, coin_selection_params.rng_fast, coin_selection_params.m_effective_feerate)}) {
+        srdltd_result->ComputeAndSetWaste(coin_selection_params.m_cost_of_change);
+        results.push_back(*srdltd_result);
+    }
 
     if (results.size() == 0) {
         // No solution found

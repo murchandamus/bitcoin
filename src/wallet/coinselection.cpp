@@ -165,6 +165,38 @@ std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_poo
     return result;
 }
 
+std::optional<SelectionResult> SelectCoinsSRDLTD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value, FastRandomContext& rng, CFeeRate feerate)
+{
+    SelectionResult result(target_value, SelectionAlgorithm::SRDLTD);
+
+    // Maximum inputs ever used by this algorithm
+    size_t upper_bound = 60;
+    // feerate specific limit
+    size_t feerate_s_vB = feerate.GetFee(1000);
+    size_t input_limit = ((1000.0 * upper_bound + feerate_s_vB - 1)/feerate_s_vB);
+
+    std::vector<size_t> indexes;
+    indexes.resize(utxo_pool.size());
+    std::iota(indexes.begin(), indexes.end(), 0);
+    Shuffle(indexes.begin(), indexes.end(), rng);
+
+    CAmount selected_eff_value = 0;
+    // Repeat with double input_limit if no solution was found.
+    do {
+        for (const size_t i : indexes) {
+            const OutputGroup& group = utxo_pool.at(i);
+            Assume(group.GetSelectionAmount() > 0);
+            selected_eff_value = result.AddIfBetterInput(group, input_limit);
+            if (selected_eff_value >= target_value) {
+                return result;
+            }
+        }
+        input_limit = 2*input_limit;
+    }
+    while (input_limit < 2*utxo_pool.size()); // Run once with input_limit >= utxo_pool.size()
+    return std::nullopt;
+}
+
 std::optional<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value, FastRandomContext& rng)
 {
     SelectionResult result(target_value, SelectionAlgorithm::SRD);
@@ -424,6 +456,11 @@ CAmount SelectionResult::GetSelectedValue() const
     return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin.txout.nValue; });
 }
 
+CAmount SelectionResult::GetSelectedEffectiveValue() const
+{
+    return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin.effective_value; });
+}
+
 void SelectionResult::Clear()
 {
     m_selected_inputs.clear();
@@ -434,6 +471,17 @@ void SelectionResult::AddInput(const OutputGroup& group)
 {
     util::insert(m_selected_inputs, group.m_outputs);
     m_use_effective = !group.m_subtract_fee_outputs;
+}
+
+CAmount SelectionResult::AddIfBetterInput(const OutputGroup& group, size_t limit)
+{
+    assert(limit > 0);
+    util::insert(m_selected_inputs, group.m_outputs);
+    m_use_effective = !group.m_subtract_fee_outputs;
+    while (m_selected_inputs.size() > limit) {
+        m_selected_inputs.erase(m_selected_inputs.begin());
+    }
+    return GetSelectedEffectiveValue();
 }
 
 const std::set<COutput>& SelectionResult::GetInputSet() const
@@ -468,6 +516,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::BNB: return "bnb";
     case SelectionAlgorithm::KNAPSACK: return "knapsack";
     case SelectionAlgorithm::SRD: return "srd";
+    case SelectionAlgorithm::SRDLTD: return "srdltd";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
     }
