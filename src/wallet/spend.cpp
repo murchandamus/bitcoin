@@ -404,6 +404,11 @@ std::optional<SelectionResult> AttemptSelection(const CWallet& wallet, const CAm
         results.push_back(*fifo_result);
     }
 
+    if (auto lucky7_result{SelectCoinsBlackjack(positive_groups, target_with_change)}) {
+        lucky7_result->ComputeAndSetWaste(coin_selection_params.m_cost_of_change);
+        results.push_back(*lucky7_result);
+    }
+
     if (auto blackjack_result{SelectCoinsBlackjack(positive_groups, target_with_change)}) {
         blackjack_result->ComputeAndSetWaste(coin_selection_params.m_cost_of_change);
         results.push_back(*blackjack_result);

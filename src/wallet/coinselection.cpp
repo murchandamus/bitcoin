@@ -209,6 +209,40 @@ std::optional<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& ut
     return std::nullopt;
 }
 
+std::optional<SelectionResult> SelectCoinsLucky7(std::vector<OutputGroup>& groups, const CAmount& nTargetValue)
+{
+    SelectionResult result(nTargetValue);
+    std::sort(groups.begin(), groups.end(), descending);
+
+    CAmount nTotal = 0;
+    std::optional<size_t> add_last;
+    size_t input_count = 0;
+    for (unsigned int i = 0; i < groups.size(); i++) {
+        nTotal += groups[i].GetSelectionAmount();
+        if (nTotal < nTargetValue) {
+            // Only select UTXOs that keep us below the target
+            result.AddInput(groups[i]);
+            input_count++;
+        } else {
+            // Remember the last UTXO that would have gotten us past the target
+            add_last = i;
+
+            // but skip UTXOs that take us past the target
+            nTotal -= groups[i].GetSelectionAmount();
+        }
+        if (add_last.has_value() && input_count > 6) {
+            // Don't use more than 7 inputs if unless necessary
+            continue;
+        }
+    }
+    if (add_last.has_value()) {
+        result.AddInput(groups[add_last.value()]);
+        return result;
+    }
+
+    return std::nullopt;
+}
+
 std::optional<SelectionResult> SelectCoinsBlackjack(std::vector<OutputGroup>& groups, const CAmount& nTargetValue)
 {
     SelectionResult result(nTargetValue);

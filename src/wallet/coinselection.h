@@ -260,6 +260,9 @@ std::optional<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& ut
 // Never overshoot target but fill the gap with sand
 std::optional<SelectionResult> SelectCoinsBlackjack(std::vector<OutputGroup>& groups, const CAmount& nTargetValue);
 
+// Never overshoot target but fill the gap with sand, avoid using more than 7 inputs if possible
+std::optional<SelectionResult> SelectCoinsLucky7(std::vector<OutputGroup>& groups, const CAmount& nTargetValue);
+
 // Original coin selection algorithm as a fallback
 std::optional<SelectionResult> KnapsackSolver(std::vector<OutputGroup>& groups, const CAmount& nTargetValue);
 } // namespace wallet
