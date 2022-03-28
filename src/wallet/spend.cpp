@@ -190,7 +190,7 @@ void AvailableCoins(const CWallet& wallet, std::vector<COutput>& vCoins, const C
 
             bool solvable = provider ? IsSolvable(*provider, wtx.tx->vout[i].scriptPubKey) : false;
             bool spendable = ((mine & ISMINE_SPENDABLE) != ISMINE_NO) || (((mine & ISMINE_WATCH_ONLY) != ISMINE_NO) && (coinControl && coinControl->fAllowWatchOnly && solvable));
-            int input_bytes = GetTxSpendSize(wallet, wtx, i, (coinControl && coinControl->fAllowWatchOnly));
+            int input_bytes = CalculateMaximumSignedInputSize(wtx.tx->vout[i], provider.get(), /*use_max_sig=*/(coinControl && coinControl->fAllowWatchOnly));
 
             vCoins.emplace_back(COutPoint(wtx.GetHash(), i), wtx.tx->vout.at(i), nDepth, input_bytes, spendable, solvable, safeTx, wtx.GetTxTime(), tx_from_me);
 
