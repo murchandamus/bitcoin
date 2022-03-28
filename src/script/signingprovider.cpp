@@ -82,6 +82,18 @@ FlatSigningProvider Merge(const FlatSigningProvider& a, const FlatSigningProvide
     return ret;
 }
 
+void MergeInto(FlatSigningProvider& a, const FlatSigningProvider& b)
+{
+    a.scripts.insert(b.scripts.begin(), b.scripts.end());
+    a.pubkeys.insert(b.pubkeys.begin(), b.pubkeys.end());
+    a.keys.insert(b.keys.begin(), b.keys.end());
+    a.origins.insert(b.origins.begin(), b.origins.end());
+    a.tr_spenddata = a.tr_spenddata;
+    for (const auto& [output_key, spenddata] : b.tr_spenddata) {
+        a.tr_spenddata[output_key].Merge(spenddata);
+    }
+}
+
 void FillableSigningProvider::ImplicitlyLearnRelatedKeyScripts(const CPubKey& pubkey)
 {
     AssertLockHeld(cs_KeyStore);

@@ -27,7 +27,7 @@ using interfaces::FoundBlock;
 namespace wallet {
 static constexpr size_t OUTPUT_GROUP_MAX_ENTRIES{100};
 
-int GetTxSpendSize(const CWallet& wallet, const CWalletTx& wtx, unsigned int out, bool use_max_sig)
+int GetTxSpendSize(CWallet& wallet, const CWalletTx& wtx, unsigned int out, bool use_max_sig)
 {
     return CalculateMaximumSignedInputSize(wtx.tx->vout[out], &wallet, use_max_sig);
 }
@@ -42,14 +42,14 @@ int CalculateMaximumSignedInputSize(const CTxOut& txout, const SigningProvider* 
     return GetVirtualTransactionInputSize(txn.vin[0]);
 }
 
-int CalculateMaximumSignedInputSize(const CTxOut& txout, const CWallet* wallet, bool use_max_sig)
+int CalculateMaximumSignedInputSize(const CTxOut& txout, CWallet* wallet, bool use_max_sig)
 {
     const std::unique_ptr<SigningProvider> provider = wallet->GetSolvingProvider(txout.scriptPubKey);
     return CalculateMaximumSignedInputSize(txout, provider.get(), use_max_sig);
 }
 
 // txouts needs to be in the order of tx.vin
-TxSize CalculateMaximumSignedTxSize(const CTransaction &tx, const CWallet *wallet, const std::vector<CTxOut>& txouts, const CCoinControl* coin_control)
+TxSize CalculateMaximumSignedTxSize(const CTransaction &tx, CWallet *wallet, const std::vector<CTxOut>& txouts, const CCoinControl* coin_control)
 {
     CMutableTransaction txNew(tx);
     if (!wallet->DummySignTx(txNew, txouts, coin_control)) {
@@ -61,7 +61,7 @@ TxSize CalculateMaximumSignedTxSize(const CTransaction &tx, const CWallet *walle
     return TxSize{vsize, weight};
 }
 
-TxSize CalculateMaximumSignedTxSize(const CTransaction &tx, const CWallet *wallet, const CCoinControl* coin_control)
+TxSize CalculateMaximumSignedTxSize(const CTransaction &tx, CWallet *wallet, const CCoinControl* coin_control)
 {
     std::vector<CTxOut> txouts;
     // Look up the inputs. The inputs are either in the wallet, or in coin_control.
@@ -84,7 +84,7 @@ TxSize CalculateMaximumSignedTxSize(const CTransaction &tx, const CWallet *walle
     return CalculateMaximumSignedTxSize(tx, wallet, txouts, coin_control);
 }
 
-void AvailableCoins(const CWallet& wallet, std::vector<COutput>& vCoins, const CCoinControl* coinControl, const CAmount& nMinimumAmount, const CAmount& nMaximumAmount, const CAmount& nMinimumSumAmount, const uint64_t nMaximumCount)
+void AvailableCoins(CWallet& wallet, std::vector<COutput>& vCoins, const CCoinControl* coinControl, const CAmount& nMinimumAmount, const CAmount& nMaximumAmount, const CAmount& nMinimumSumAmount, const uint64_t nMaximumCount)
 {
     AssertLockHeld(wallet.cs_wallet);
 
@@ -214,7 +214,7 @@ void AvailableCoins(const CWallet& wallet, std::vector<COutput>& vCoins, const C
     }
 }
 
-CAmount GetAvailableBalance(const CWallet& wallet, const CCoinControl* coinControl)
+CAmount GetAvailableBalance(CWallet& wallet, const CCoinControl* coinControl)
 {
     LOCK(wallet.cs_wallet);
 
@@ -253,7 +253,7 @@ const CTxOut& FindNonChangeParentOutput(const CWallet& wallet, const COutPoint& 
     return FindNonChangeParentOutput(wallet, *wallet.GetWalletTx(outpoint.hash)->tx, outpoint.n);
 }
 
-std::map<CTxDestination, std::vector<COutput>> ListCoins(const CWallet& wallet)
+std::map<CTxDestination, std::vector<COutput>> ListCoins(CWallet& wallet)
 {
     AssertLockHeld(wallet.cs_wallet);
 
@@ -422,7 +422,7 @@ std::optional<SelectionResult> AttemptSelection(const CWallet& wallet, const CAm
     return best_result;
 }
 
-std::optional<SelectionResult> SelectCoins(const CWallet& wallet, const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, const CCoinControl& coin_control, const CoinSelectionParams& coin_selection_params)
+std::optional<SelectionResult> SelectCoins(CWallet& wallet, const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, const CCoinControl& coin_control, const CoinSelectionParams& coin_selection_params)
 {
     std::vector<COutput> vCoins(vAvailableCoins);
     CAmount value_to_select = nTargetValue;

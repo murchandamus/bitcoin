@@ -85,6 +85,7 @@ struct FlatSigningProvider final : public SigningProvider
 };
 
 FlatSigningProvider Merge(const FlatSigningProvider& a, const FlatSigningProvider& b);
+void MergeInto(FlatSigningProvider& a, const FlatSigningProvider& b);
 
 /** Fillable signing provider that keeps keys in an address->secret map */
 class FillableSigningProvider : public SigningProvider

@@ -14,10 +14,10 @@ namespace wallet {
 /** Get the marginal bytes if spending the specified output from this transaction.
  * use_max_sig indicates whether to use the maximum sized, 72 byte signature when calculating the
  * size of the input spend. This should only be set when watch-only outputs are allowed */
-int GetTxSpendSize(const CWallet& wallet, const CWalletTx& wtx, unsigned int out, bool use_max_sig = false);
+int GetTxSpendSize(CWallet& wallet, const CWalletTx& wtx, unsigned int out, bool use_max_sig = false);
 
 //Get the marginal bytes of spending the specified output
-int CalculateMaximumSignedInputSize(const CTxOut& txout, const CWallet* pwallet, bool use_max_sig = false);
+int CalculateMaximumSignedInputSize(const CTxOut& txout, CWallet* pwallet, bool use_max_sig = false);
 int CalculateMaximumSignedInputSize(const CTxOut& txout, const SigningProvider* pwallet, bool use_max_sig = false);
 
 struct TxSize {
@@ -29,15 +29,15 @@ struct TxSize {
 * Use DummySignatureCreator, which inserts 71 byte signatures everywhere.
 * NOTE: this requires that all inputs must be in mapWallet (eg the tx should
 * be AllInputsMine). */
-TxSize CalculateMaximumSignedTxSize(const CTransaction& tx, const CWallet* wallet, const std::vector<CTxOut>& txouts, const CCoinControl* coin_control = nullptr);
-TxSize CalculateMaximumSignedTxSize(const CTransaction& tx, const CWallet* wallet, const CCoinControl* coin_control = nullptr) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet);
+TxSize CalculateMaximumSignedTxSize(const CTransaction& tx, CWallet* wallet, const std::vector<CTxOut>& txouts, const CCoinControl* coin_control = nullptr);
+TxSize CalculateMaximumSignedTxSize(const CTransaction& tx, CWallet* wallet, const CCoinControl* coin_control = nullptr) EXCLUSIVE_LOCKS_REQUIRED(wallet->cs_wallet);
 
 /**
  * populate vCoins with vector of available COutputs.
  */
-void AvailableCoins(const CWallet& wallet, std::vector<COutput>& vCoins, const CCoinControl* coinControl = nullptr, const CAmount& nMinimumAmount = 1, const CAmount& nMaximumAmount = MAX_MONEY, const CAmount& nMinimumSumAmount = MAX_MONEY, const uint64_t nMaximumCount = 0) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet);
+void AvailableCoins(CWallet& wallet, std::vector<COutput>& vCoins, const CCoinControl* coinControl = nullptr, const CAmount& nMinimumAmount = 1, const CAmount& nMaximumAmount = MAX_MONEY, const CAmount& nMinimumSumAmount = MAX_MONEY, const uint64_t nMaximumCount = 0) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet);
 
-CAmount GetAvailableBalance(const CWallet& wallet, const CCoinControl* coinControl = nullptr);
+CAmount GetAvailableBalance(CWallet& wallet, const CCoinControl* coinControl = nullptr);
 
 /**
  * Find non-change parent output.
@@ -48,7 +48,7 @@ const CTxOut& FindNonChangeParentOutput(const CWallet& wallet, const COutPoint& 
 /**
  * Return list of available coins and locked coins grouped by non-change output address.
  */
-std::map<CTxDestination, std::vector<COutput>> ListCoins(const CWallet& wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet);
+std::map<CTxDestination, std::vector<COutput>> ListCoins(CWallet& wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet);
 
 std::vector<OutputGroup> GroupOutputs(const CWallet& wallet, const std::vector<COutput>& outputs, const CoinSelectionParams& coin_sel_params, const CoinEligibilityFilter& filter, bool positive_only);
 
@@ -79,7 +79,7 @@ std::optional<SelectionResult> AttemptSelection(const CWallet& wallet, const CAm
  * returns                             If successful, a SelectionResult containing the selected coins
  *                                     If failed, a nullopt.
  */
-std::optional<SelectionResult> SelectCoins(const CWallet& wallet, const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, const CCoinControl& coin_control,
+std::optional<SelectionResult> SelectCoins(CWallet& wallet, const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, const CCoinControl& coin_control,
                  const CoinSelectionParams& coin_selection_params) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet);
 
 /**
