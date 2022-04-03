@@ -241,6 +241,56 @@ static void ApproximateBestSubset(const std::vector<OutputGroup>& groups, const 
     }
 }
 
+bool BucketSelect(const CAmount& nTargetValue, std::vector<OutputGroup>& groups, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet)
+{
+    std::set<CInputCoin> out_set;
+    CAmount value_ret = 0;
+
+    FastRandomContext insecure_rand;
+    std::vector<int> bucket_lower_bounds;
+    bucket_lower_bounds.push_back(0);
+    // Randomize upper bound of lowest bucket
+    int lower_bound = 1000 + Math.round(insecure_rand.randrange(2000));
+    while (lower_bound < 10*10e8) {
+        lower_bounds.push_back(lower_bound);
+        lower_bound = lower_bound*2;
+    }
+
+    std::vector<std::vector<OutputGroup>> buckets;
+    buckets.resize(bucket_lower_bounds.size());
+    int buckets_with_groups = buckets.size();
+
+    for (const OutputGroup& group : groups) {
+        int bucket_index = 0;
+        while (bucket_lower_bounds[bucket_index] <= group.m_value) {
+            ++bucket_index;
+        }
+        buckets[bucket_index].push_back(group);
+    }
+
+    int selected_eff_value = 0;
+    while (selected_eff_value < nTargetValue) {
+        int bucket_index = Math.round(insecure_rand.randrange(buckets_with_groups));
+        std::vector<OutputGroup> random_bucket = buckets[bucket_index];
+        if (random_bucket.size() > 0) {
+            const OutputGroup& group = random_bucket.pop_back();
+            Assume(group.GetSelectionAmount() > 0);
+            selected_eff_value += group.GetSelectionAmount();
+            value_ret += group.m_value;
+            util::insert(out_set, group.m_outputs);
+            if (selected_eff_value >= target_value) {
+                return std::make_pair(out_set, value_ret);
+            }
+        } else {
+            // Overwrite empty bucket at this index with last, reduce the random selection bounds by one
+            buckets[bucket_index] = buckets[buckets_with_groups-1];
+            --buckets_with_groups;
+        }
+    }
+
+    return std::nullopt;
+}
+
 bool KnapsackSolver(const CAmount& nTargetValue, std::vector<OutputGroup>& groups, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet)
 {
     setCoinsRet.clear();
