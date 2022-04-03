@@ -241,7 +241,7 @@ static void ApproximateBestSubset(const std::vector<OutputGroup>& groups, const 
     }
 }
 
-bool BucketSelect(const CAmount& nTargetValue, std::vector<OutputGroup>& groups, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet)
+std::optional<std::pair<std::set<CInputCoin>, CAmount>> BucketSelect(const std::vector<OutputGroup>& uxto_pool, CAmount& target_value)
 {
     std::set<CInputCoin> out_set;
     CAmount value_ret = 0;
@@ -260,7 +260,7 @@ bool BucketSelect(const CAmount& nTargetValue, std::vector<OutputGroup>& groups,
     buckets.resize(bucket_lower_bounds.size());
     int buckets_with_groups = buckets.size();
 
-    for (const OutputGroup& group : groups) {
+    for (const OutputGroup& group : uxto_pool) {
         int bucket_index = 0;
         while (bucket_lower_bounds[bucket_index] <= group.m_value) {
             ++bucket_index;
@@ -269,7 +269,7 @@ bool BucketSelect(const CAmount& nTargetValue, std::vector<OutputGroup>& groups,
     }
 
     int selected_eff_value = 0;
-    while (selected_eff_value < nTargetValue) {
+    while (selected_eff_value < target_value) {
         int bucket_index = Math.round(insecure_rand.randrange(buckets_with_groups));
         std::vector<OutputGroup> random_bucket = buckets[bucket_index];
         if (random_bucket.size() > 0) {
