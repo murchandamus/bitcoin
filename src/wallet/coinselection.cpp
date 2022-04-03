@@ -241,7 +241,7 @@ static void ApproximateBestSubset(const std::vector<OutputGroup>& groups, const 
     }
 }
 
-std::optional<std::pair<std::set<CInputCoin>, CAmount>> BucketSelect(const std::vector<OutputGroup>& uxto_pool, CAmount& target_value)
+std::optional<std::pair<std::set<CInputCoin>, CAmount>> BucketSelect(const std::vector<OutputGroup>& utxo_pool, CAmount& target_value)
 {
     std::set<CInputCoin> out_set;
     CAmount value_ret = 0;
@@ -249,31 +249,41 @@ std::optional<std::pair<std::set<CInputCoin>, CAmount>> BucketSelect(const std::
     FastRandomContext insecure_rand;
     std::vector<int> bucket_lower_bounds;
     bucket_lower_bounds.push_back(0);
-    // Randomize upper bound of lowest bucket
-    int lower_bound = 1000 + Math.round(insecure_rand.randrange(2000));
+    // Randomize upper bound of lowest bucket between 1000 and 3000
+    int lower_bound = 1000 + insecure_rand.randrange(2000);
     while (lower_bound < 10*10e8) {
-        lower_bounds.push_back(lower_bound);
+        bucket_lower_bounds.push_back(lower_bound);
         lower_bound = lower_bound*2;
     }
+
+    // Shuffle UTXO pool before bucketizing
+    std::vector<size_t> indexes;
+    indexes.resize(utxo_pool.size());
+    std::iota(indexes.begin(), indexes.end(), 0);
+    Shuffle(indexes.begin(), indexes.end(), FastRandomContext());
 
     std::vector<std::vector<OutputGroup>> buckets;
     buckets.resize(bucket_lower_bounds.size());
     int buckets_with_groups = buckets.size();
 
-    for (const OutputGroup& group : uxto_pool) {
+    for (const size_t i : indexes) {
+        const OutputGroup& group = utxo_pool.at(i);
+        Assume(group.GetSelectionAmount() > 0);
         int bucket_index = 0;
+        // TODO: find more efficient way of sorting OGs into buckets
         while (bucket_lower_bounds[bucket_index] <= group.m_value) {
             ++bucket_index;
         }
         buckets[bucket_index].push_back(group);
     }
 
-    int selected_eff_value = 0;
+    CAmount selected_eff_value = 0;
     while (selected_eff_value < target_value) {
-        int bucket_index = Math.round(insecure_rand.randrange(buckets_with_groups));
+        int bucket_index = insecure_rand.randrange(buckets_with_groups);
         std::vector<OutputGroup> random_bucket = buckets[bucket_index];
         if (random_bucket.size() > 0) {
-            const OutputGroup& group = random_bucket.pop_back();
+            const OutputGroup& group = random_bucket[random_bucket.size()-1];
+            random_bucket.pop_back();
             Assume(group.GetSelectionAmount() > 0);
             selected_eff_value += group.GetSelectionAmount();
             value_ret += group.m_value;
