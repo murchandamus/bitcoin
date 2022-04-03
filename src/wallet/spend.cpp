@@ -412,6 +412,14 @@ bool AttemptSelection(const CWallet& wallet, const CAmount& nTargetValue, const 
         results.emplace_back(std::make_tuple(waste, std::move(srd_result->first), srd_result->second));
     }
 
+    // Run BucketSelect with same parameters as SRD
+    const CAmount bucket_target = nTargetValue + coin_selection_params.m_change_fee + MIN_FINAL_CHANGE;
+    auto bucket_result = BucketSelect(positive_groups, bucket_target);
+    if (bucket_result != std::nullopt) {
+        const auto waste = GetSelectionWaste(bucket_result->first, coin_selection_params.m_cost_of_change, srd_target, !coin_selection_params.m_subtract_fee_outputs);
+        results.emplace_back(std::make_tuple(waste, std::move(bucket_result->first), bucket_result->second));
+    }
+
     if (results.size() == 0) {
         // No solution found
         return false;
