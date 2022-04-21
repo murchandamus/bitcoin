@@ -111,7 +111,7 @@ class CoinSelectionSimulation(BitcoinTestFramework):
 
         # Remaining utxos and fee stats
         remaining_utxos = self.tester.listunspent()
-        cost_to_empty = Decimal(-1) * Decimal(len(remaining_utxos)) * Decimal(68) * Decimal(0.00001) / Decimal(1000)
+        cost_to_empty = Decimal(len(remaining_utxos)) * Decimal(68) * Decimal(0.0001) / Decimal(1000)
         total_cost = self.total_fees + cost_to_empty
         mean_fees = Decimal(self.total_fees) / Decimal(self.withdraws) if self.withdraws > 0 else 0
 
