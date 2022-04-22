@@ -99,6 +99,7 @@ class CoinSelectionSimulation(BitcoinTestFramework):
     def add_options(self, parser):
         parser.add_argument("resultsdir")
         parser.add_argument("--scenario", default="sim_data.csv")
+        parser.add_argument("--label", default=None)
 
     def log_sim_results(self, res_file):
         getcontext().prec = 12
@@ -150,14 +151,23 @@ class CoinSelectionSimulation(BitcoinTestFramework):
         repo = git.Repo(".")
         commit = repo.commit("HEAD~9")
         commit_hash = commit.hexsha
-        self.log.info(f"Based on commit: {commit_hash}")
+        branch = repo.active_branch.name
+        if self.options.label is None:
+            self.log.info(f"Based on branch {branch}({commit_hash})")
+        else:
+            label = self.options.label
+            self.log.info(f"Based on branch: {branch} ({commit_hash}), label: {label}")
+
 
         # Get a unique id
         unique_id = uuid.uuid4().hex
         self.log.info(f"This simulation's Unique ID: {unique_id}")
 
         # Make an output folder
-        results_dir = os.path.join(self.options.resultsdir, f"commit_{commit_hash}", f"sim_{unique_id}")
+        if self.options.label is None:
+            results_dir = os.path.join(self.options.resultsdir, f"{branch}-{commit_hash}", f"sim_{unique_id}")
+        else:
+            results_dir = os.path.join(self.options.resultsdir, f"{branch}-{commit_hash}-{label}-", f"sim_{unique_id}")
         os.makedirs(results_dir, exist_ok=True)
 
         # Setup debug logging
