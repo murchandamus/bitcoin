@@ -48,7 +48,7 @@ struct {
  * predecessor.
  *
  * The Branch and Bound algorithm is described in detail in Murch's Master Thesis:
- * https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf
+ * https://murch.one/erhardt2016coinselection.pdf
  *
  * @param const std::vector<OutputGroup>& utxo_pool The set of UTXO groups that we are choosing from.
  *        These UTXO groups will be sorted in descending order by effective value and the OutputGroups'
