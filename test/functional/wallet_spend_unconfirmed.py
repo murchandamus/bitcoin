@@ -49,9 +49,9 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         self.log.info("Start test feerate with confirmed input")
         wallet = self.setup_and_fund_wallet("confirmed_wallet")
 
-        spending_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=0.5, fee_rate=self.target_fee_rate)
-        spending_tx = wallet.gettransaction(txid=spending_txid, verbose=True)
-        resulting_fee_rate = self.calc_fee_rate(spending_tx)
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=0.5, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
         assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
 
         self.generate(self.nodes[0], 1)
@@ -62,19 +62,19 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         wallet = self.setup_and_fund_wallet("unconfirmed_high_wallet")
 
         # Send unconfirmed transaction with high feerate to testing wallet
-        funding_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=100)
-        funding_tx = wallet.gettransaction(txid=funding_txid, verbose=True)
-        resulting_fee_rate_funding = self.calc_fee_rate(funding_tx)
+        parent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=100)
+        parent_tx = wallet.gettransaction(txid=parent_txid, verbose=True)
+        resulting_fee_rate_funding = self.calc_fee_rate(parent_tx)
         assert_greater_than(resulting_fee_rate_funding, self.target_fee_rate)
 
-        spending_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=0.5, fee_rate=self.target_fee_rate)
-        spending_tx = wallet.gettransaction(txid=spending_txid, verbose=True)
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=0.5, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
 
-        self.assert_spends_only_parent(spending_tx, funding_txid)
+        self.assert_spends_only_parent(ancestor_aware_tx, parent_txid)
 
-        resulting_fee_rate = self.calc_fee_rate(spending_tx)
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
         assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
-        resulting_ancestry_fee_rate = self.calc_set_fee_rate([funding_tx, spending_tx])
+        resulting_ancestry_fee_rate = self.calc_set_fee_rate([parent_tx, ancestor_aware_tx])
         assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
 
         self.generate(self.nodes[0], 1)
@@ -84,24 +84,54 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         self.log.info("Start test feerate with low feerate unconfirmed input")
         wallet = self.setup_and_fund_wallet("unconfirmed_low_wallet")
 
-        funding_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=1)
-        funding_tx = wallet.gettransaction(txid=funding_txid, verbose=True)
+        parent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=1)
+        parent_tx = wallet.gettransaction(txid=parent_txid, verbose=True)
 
-        resulting_fee_rate_funding = self.calc_fee_rate(funding_tx)
+        resulting_fee_rate_funding = self.calc_fee_rate(parent_tx)
         assert_greater_than(self.target_fee_rate, resulting_fee_rate_funding)
 
-        spending_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=0.5, fee_rate=self.target_fee_rate)
-        spending_tx = wallet.gettransaction(txid=spending_txid, verbose=True)
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=0.5, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
 
-        self.assert_spends_only_parent(spending_tx, funding_txid)
+        self.assert_spends_only_parent(ancestor_aware_tx, parent_txid)
 
-        resulting_fee_rate = self.calc_fee_rate(spending_tx)
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
         assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
-        resulting_ancestry_fee_rate = self.calc_set_fee_rate([funding_tx, spending_tx])
+        resulting_ancestry_fee_rate = self.calc_set_fee_rate([parent_tx, ancestor_aware_tx])
         assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
 
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
+
+    def test_chain_of_unconfirmed_low(self):
+        self.log.info("Start test with parent and grandparent tx")
+        wallet = self.setup_and_fund_wallet("unconfirmed_low_chain_wallet")
+
+        grandparent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1.5, fee_rate=2)
+        gp_tx = wallet.gettransaction(txid=grandparent_txid, verbose=True)
+        resulting_fee_rate_grandparent = self.calc_fee_rate(gp_tx)
+
+        assert_greater_than(self.target_fee_rate, resulting_fee_rate_grandparent)
+
+        parent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=1)
+        p_tx = wallet.gettransaction(txid=parent_txid, verbose=True)
+        resulting_fee_rate_parent = self.calc_fee_rate(p_tx)
+
+        assert_greater_than(self.target_fee_rate, resulting_fee_rate_parent)
+
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=1, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
+
+        self.assert_spends_only_parent(ancestor_aware_tx, p_tx)
+
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
+        assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
+        resulting_ancestry_fee_rate = self.calc_set_fee_rate([gp_tx, p_tx, ancestor_aware_tx])
+        assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
+
+        self.generate(self.nodes[0], 1)
+        wallet.unloadwallet()
+
 
 # TODO: Test: Do not count transactions with higher ancestor feerates towards total ancestor fees and size
 
@@ -119,6 +149,9 @@ class UnconfirmedInputTest(BitcoinTestFramework):
 
         # Actual test: Spend unconfirmed input with feerate lower than target feerate. Expect that parent gets bumped to target feerate.
         self.test_target_feerate_unconfirmed_low()
+
+        # Actual test: Spend unconfirmed input with unconfirmed parent both of which have a feerate lower than target feerate. Expect that both ancestors get bumped to target feerate.
+        self.test_chain_of_unconfirmed_low()
 
 if __name__ == '__main__':
     UnconfirmedInputTest().main()
