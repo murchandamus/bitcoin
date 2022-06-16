@@ -200,7 +200,36 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
 
-# TODO: Test: Do not count transactions with higher ancestor feerates towards total ancestor fees and size
+    def test_chain_of_high_low(self):
+        # TODO: Test: Do not count transactions with higher ancestor feerates towards total ancestor fees and size
+        self.log.info("Start test with low parent and high grandparent tx")
+        wallet = self.setup_and_fund_wallet("high_low_chain_wallet")
+
+        grandparent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1.8, fee_rate=self.target_fee_rate + 1)
+        gp_tx = wallet.gettransaction(txid=grandparent_txid, verbose=True)
+        resulting_fee_rate_grandparent = self.calc_fee_rate(gp_tx)
+
+        # grandparent has higher feerate
+        assert_greater_than(resulting_fee_rate_grandparent, self.target_fee_rate)
+
+        parent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1.5, fee_rate=1)
+        p_tx = wallet.gettransaction(txid=parent_txid, verbose=True)
+        resulting_fee_rate_parent = self.calc_fee_rate(p_tx)
+
+        assert_greater_than(self.target_fee_rate, resulting_fee_rate_parent)
+
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=1.3, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
+
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
+        assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
+        resulting_ancestry_fee_rate = self.calc_set_fee_rate([gp_tx, p_tx, ancestor_aware_tx])
+        assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.5, resulting_ancestry_fee_rate)
+
+        self.generate(self.nodes[0], 1)
+        wallet.unloadwallet()
+
 
     def run_test(self):
         self.log.info("Starting UnconfirmedInputTest!")
@@ -225,6 +254,9 @@ class UnconfirmedInputTest(BitcoinTestFramework):
 
         # Actual test: Spend unconfirmed inputs from two parents with mixed feerates
         self.test_mixed_feerate_unconfirmed_parents()
+
+        # Actual test: Spend chain with high grandparent low parent
+        self.test_chain_of_high_low()
 
 if __name__ == '__main__':
     UnconfirmedInputTest().main()
