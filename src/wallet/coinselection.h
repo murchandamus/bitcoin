@@ -90,16 +90,18 @@ public:
             if (chain_interface && depth == 0) {
                 // Simplification: assume that all ancestors have lower feerates and no other descendants
                 std::optional<std::map<uint256, std::pair<CAmount, uint64_t>>> mining_score_map = chain_interface->get().getClusterMiningScores({outpoint.hash});
-                auto [ancestor_set_fee, ancestor_set_vsize] = mining_score_map.value()[outpoint.hash];
+                if (mining_score_map && mining_score_map.value().find(outpoint.hash) != mining_score_map.value().end()) {
+                    auto [ancestor_set_fee, ancestor_set_vsize] = mining_score_map.value()[outpoint.hash];
 
-                // void getTransactionAncestry(const uint256& txid, size_t& ancestors, size_t& descendants, size_t* ancestorsize, CAmount* ancestorfees) override
-                // std::optional<std::map<uint256, std::pair<CAmount, uint64_t>>> getClusterMiningScores(const std::vector<uint256>& txids) override
-                // TODO: Exclude ancestors that have a _higher mining score_ (i.e. own ancestor feerate or ancestor feerate in one of their descendants)
-                // TODO: HANDLE RELATED UNCONFIRMED INPUTS. This currently only gives the correct solution while we at most include a single unconfirmed input or unrelated unconfirmed inputs.
-                CAmount ancestor_target_fees = feerate->GetFee(ancestor_set_vsize); // Fees ancestors need to pay to have target feerate
-                if (ancestor_set_fee < ancestor_target_fees) { // bump only if ancestor txs have lower feerate
-                    ancestor_bump_fees = ancestor_target_fees - ancestor_set_fee;
-                    fee = fee.value() + ancestor_bump_fees;
+                    // void getTransactionAncestry(const uint256& txid, size_t& ancestors, size_t& descendants, size_t* ancestorsize, CAmount* ancestorfees) override
+                    // std::optional<std::map<uint256, std::pair<CAmount, uint64_t>>> getClusterMiningScores(const std::vector<uint256>& txids) override
+                    // TODO: Exclude ancestors that have a _higher mining score_ (i.e. own ancestor feerate or ancestor feerate in one of their descendants)
+                    // TODO: HANDLE RELATED UNCONFIRMED INPUTS. This currently only gives the correct solution while we at most include a single unconfirmed input or unrelated unconfirmed inputs.
+                    CAmount ancestor_target_fees = feerate->GetFee(ancestor_set_vsize); // Fees ancestors need to pay to have target feerate
+                    if (ancestor_set_fee < ancestor_target_fees) { // bump only if ancestor txs have lower feerate
+                        ancestor_bump_fees = ancestor_target_fees - ancestor_set_fee;
+                        fee = fee.value() + ancestor_bump_fees;
+                    }
                 }
             }
             effective_value = txout.nValue - fee.value();
