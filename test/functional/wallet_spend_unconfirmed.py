@@ -159,7 +159,7 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
         resulting_ancestry_fee_rate = self.calc_set_fee_rate([p_one_tx, p_two_tx, ancestor_aware_tx])
         assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
-        assert_greater_than_or_equal(self.target_fee_rate*1.5, resulting_ancestry_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.1, resulting_ancestry_fee_rate)
 
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
@@ -195,7 +195,7 @@ class UnconfirmedInputTest(BitcoinTestFramework):
 
         resulting_bumped_ancestry_fee_rate = self.calc_set_fee_rate([p_low_tx, ancestor_aware_tx])
         assert_greater_than_or_equal(resulting_bumped_ancestry_fee_rate, self.target_fee_rate)
-        assert_greater_than_or_equal(self.target_fee_rate*1.5, resulting_bumped_ancestry_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.1, resulting_bumped_ancestry_fee_rate)
 
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
@@ -225,9 +225,9 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
         resulting_ancestry_fee_rate = self.calc_set_fee_rate([p_tx, ancestor_aware_tx])
         assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
-        assert_greater_than_or_equal(self.target_fee_rate*1.5, resulting_ancestry_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.1, resulting_ancestry_fee_rate)
         resulting_ancestry_fee_rate_with_high_feerate_gp = self.calc_set_fee_rate([gp_tx, p_tx, ancestor_aware_tx])
-        assert_greater_than_or_equal(resulting_ancestry_fee_rate_with_high_feerate_gp, self.target_fee_rate*1.5)
+        assert_greater_than_or_equal(resulting_ancestry_fee_rate_with_high_feerate_gp, self.target_fee_rate*1.1)
 
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
