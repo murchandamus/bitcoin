@@ -232,6 +232,60 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
 
+    def test_chain_of_high_low_below_target_feerate(self):
+        # TODO: Test that grandparent gets bumped if it has a low feerate, but parent has lower feerate
+        self.log.info("Start test with low parent and higher low grandparent tx")
+        wallet = self.setup_and_fund_wallet("low_and_lower_chain_wallet")
+
+        grandparent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1.8, fee_rate=5)
+        gp_tx = wallet.gettransaction(txid=grandparent_txid, verbose=True)
+        resulting_fee_rate_grandparent = self.calc_fee_rate(gp_tx)
+
+        # grandparent has higher feerate
+        assert_greater_than(self.target_fee_rate, resulting_fee_rate_grandparent)
+
+        parent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1.5, fee_rate=1)
+        p_tx = wallet.gettransaction(txid=parent_txid, verbose=True)
+        resulting_fee_rate_parent = self.calc_fee_rate(p_tx)
+
+        assert_greater_than(self.target_fee_rate, resulting_fee_rate_parent)
+
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=1.3, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
+
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
+        assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
+        resulting_ancestry_fee_rate = self.calc_set_fee_rate([gp_tx, p_tx, ancestor_aware_tx])
+        assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.1, resulting_ancestry_fee_rate)
+
+        self.generate(self.nodes[0], 1)
+        wallet.unloadwallet()
+
+    def test_target_feerate_unconfirmed_low_overlapping_ancestry(self):
+        # TODO: when two UTXOs have overlapping ancestry, we'll bump the ancestors twice
+        self.log.info("Start test where two UTXOs have overlapping ancestry")
+        wallet = self.setup_and_fund_wallet("overlapping_ancestry_wallet")
+
+        parent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=1)
+        parent_tx = wallet.gettransaction(txid=parent_txid, verbose=True)
+
+        resulting_fee_rate_funding = self.calc_fee_rate(parent_tx)
+        assert_greater_than(self.target_fee_rate, resulting_fee_rate_funding)
+
+        # spend both outputs from parent transaction
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=1.5, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
+
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
+        assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
+        resulting_ancestry_fee_rate = self.calc_set_fee_rate([parent_tx, ancestor_aware_tx])
+        assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.1, resulting_ancestry_fee_rate)
+
+        self.generate(self.nodes[0], 1)
+        wallet.unloadwallet()
+
 
     def run_test(self):
         self.log.info("Starting UnconfirmedInputTest!")
@@ -259,6 +313,12 @@ class UnconfirmedInputTest(BitcoinTestFramework):
 
         # Actual test: Spend chain with high grandparent low parent
         self.test_chain_of_high_low()
+
+        # Actual test: Spend chain with low grandparent lower parent
+        # TODO: self.test_chain_of_high_low_below_target_feerate()
+
+        # Actual test: Spend two UTXOs with overlapping ancestry, ensure not bumping twice
+        # TODO: self.test_target_feerate_unconfirmed_low_overlapping_ancestry()
 
 if __name__ == '__main__':
     UnconfirmedInputTest().main()
