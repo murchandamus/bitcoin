@@ -463,8 +463,8 @@ std::map<uint256, std::pair<CAmount, uint64_t>> BlockAssembler::CalculateScores(
         // on which has the higher ancestor feerate.
         // Set the mining score as cluster_iter's ancestor feerate for now. The value of this var
         // might change if we decide the mapModifiedTx entry is better instead.
-        CAmount ancestor_set_fee{(*cluster_iter)->GetModFeesWithAncestors()};
-        uint64_t ancestor_set_size{(*cluster_iter)->GetSizeWithAncestors()};
+        CAmount ancestor_set_fee{0};
+        uint64_t ancestor_set_size{0};
         CFeeRate mining_score(ancestor_set_fee, ancestor_set_size);
         modtxscoreiter modit = mapModifiedTx.get<ancestor_score>().begin();
         if (cluster_iter == cluster.end()) {
@@ -476,6 +476,9 @@ std::map<uint256, std::pair<CAmount, uint64_t>> BlockAssembler::CalculateScores(
         } else {
             // Try to compare the mapTx entry to the mapModifiedTx entry
             iter = *cluster_iter;
+            ancestor_set_fee = iter->GetModFeesWithAncestors();
+            ancestor_set_size = iter->GetSizeWithAncestors();
+            mining_score = CFeeRate(ancestor_set_fee, ancestor_set_size);
             if (modit != mapModifiedTx.get<ancestor_score>().end() &&
                 CompareTxMemPoolEntryByAncestorFee()(*modit, CTxMemPoolModifiedEntry(iter))) {
                 // The best entry in mapModifiedTx has higher score
