@@ -90,8 +90,9 @@ public:
             if (chain_interface && depth == 0) {
                 // Simplification: assume that all ancestors have lower feerates and no other descendants
                 std::optional<std::map<uint256, std::pair<CAmount, uint64_t>>> mining_score_map = chain_interface->get().getClusterMiningScores({outpoint.hash});
-                if (mining_score_map && mining_score_map.value().find(outpoint.hash) != mining_score_map.value().end()) {
-                    auto [ancestor_set_fee, ancestor_set_vsize] = mining_score_map.value()[outpoint.hash];
+                std::map<uint256, std::pair<CAmount, uint64_t>>::iterator mining_score_map_iter;
+                if (mining_score_map && (mining_score_map_iter = mining_score_map.value().find(outpoint.hash)) != mining_score_map.value().end()) {
+                    auto [ancestor_set_fee, ancestor_set_vsize] = mining_score_map_iter->second;
 
                     // void getTransactionAncestry(const uint256& txid, size_t& ancestors, size_t& descendants, size_t* ancestorsize, CAmount* ancestorfees) override
                     // std::optional<std::map<uint256, std::pair<CAmount, uint64_t>>> getClusterMiningScores(const std::vector<uint256>& txids) override
