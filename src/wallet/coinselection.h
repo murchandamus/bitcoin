@@ -285,6 +285,9 @@ private:
     bool m_use_effective{false};
     /** The computed waste */
     std::optional<CAmount> m_waste;
+    /** The amount the input set exceeds the target that will be discarded with the fee. Implies
+     * that the transaction will be changeless. */
+    CAmount excess;
 
 public:
     /** The target the algorithm selected for. Note that this may not be equal to the recipient amount as it can include non-input fees */
@@ -307,6 +310,9 @@ public:
     /** Calculates and stores the waste for this selection via GetSelectionWaste */
     void ComputeAndSetWaste(CAmount change_cost);
     [[nodiscard]] CAmount GetWaste() const;
+
+    /** Get the fee necessary for achieving the target feerate for this input set */
+    CAmount GetSelectionFee() const;
 
     /** Get m_selected_inputs */
     const std::set<COutput>& GetInputSet() const;
