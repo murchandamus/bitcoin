@@ -802,11 +802,10 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     }
     TRACE5(coin_selection, selected_coins, wallet.GetName().c_str(), GetAlgorithmName(result->m_algo).c_str(), result->m_target, result->GetWaste(), result->GetSelectedValue());
 
-    CAmount fees_before_change = result->GetSelectionFee() + not_input_fees;
-    CAmount final_fees{fees_before_change};
+    CAmount tx_fees{result->GetSelectionFee() + not_input_fees};
     if (result->m_excess > 0) { // we want change
-        final_fees = fees_before_change + coin_selection_params.m_change_fee;
-        CAmount change_amount = result->GetSelectedValue() - recipients_sum - final_fees;
+        tx_fees += coin_selection_params.m_change_fee;
+        CAmount change_amount = result->GetSelectedValue() - recipients_sum - tx_fees;
         CTxOut newTxOut(change_amount, scriptChange);
 
         if (!IsDust(newTxOut, coin_selection_params.m_discard_feerate)) {
@@ -821,9 +820,9 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
             }
 
             assert(nChangePosInOut != -1);
-            auto change_position = txNew.vout.insert(txNew.vout.begin() + nChangePosInOut, newTxOut);
+            txNew.vout.insert(txNew.vout.begin() + nChangePosInOut, newTxOut);
         } else {
-            final_fees += change_amount;
+            tx_fees += change_amount;
         }
     }
 
@@ -852,12 +851,12 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
         return std::nullopt;
     }
     CAmount sanity_lower_bound_fees = coin_selection_params.m_effective_feerate.GetFee(nBytes);
-    assert(final_fees >= sanity_lower_bound_fees);
+    assert(tx_fees >= sanity_lower_bound_fees);
 
 
     // Reduce output values for subtractFeeFromAmount
     if (coin_selection_params.m_subtract_fee_outputs) {
-        CAmount to_reduce = final_fees;
+        CAmount to_reduce = tx_fees;
         int i = 0;
         bool fFirst = true;
         for (const auto& recipient : vecSend)
@@ -912,7 +911,7 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
         return std::nullopt;
     }
 
-    if (final_fees > wallet.m_default_max_tx_fee) {
+    if (tx_fees > wallet.m_default_max_tx_fee) {
         error = TransactionErrorString(TransactionError::MAX_FEE_EXCEEDED);
         return std::nullopt;
     }
@@ -931,14 +930,14 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     fee_calc_out = feeCalc;
 
     wallet.WalletLogPrintf("Fee Calculation: Fee:%d Bytes:%u Tgt:%d (requested %d) Reason:\"%s\" Decay %.5f: Estimation: (%g - %g) %.2f%% %.1f/(%.1f %d mem %.1f out) Fail: (%g - %g) %.2f%% %.1f/(%.1f %d mem %.1f out)\n",
-              final_fees, nBytes, feeCalc.returnedTarget, feeCalc.desiredTarget, StringForFeeReason(feeCalc.reason), feeCalc.est.decay,
+              tx_fees, nBytes, feeCalc.returnedTarget, feeCalc.desiredTarget, StringForFeeReason(feeCalc.reason), feeCalc.est.decay,
               feeCalc.est.pass.start, feeCalc.est.pass.end,
               (feeCalc.est.pass.totalConfirmed + feeCalc.est.pass.inMempool + feeCalc.est.pass.leftMempool) > 0.0 ? 100 * feeCalc.est.pass.withinTarget / (feeCalc.est.pass.totalConfirmed + feeCalc.est.pass.inMempool + feeCalc.est.pass.leftMempool) : 0.0,
               feeCalc.est.pass.withinTarget, feeCalc.est.pass.totalConfirmed, feeCalc.est.pass.inMempool, feeCalc.est.pass.leftMempool,
               feeCalc.est.fail.start, feeCalc.est.fail.end,
               (feeCalc.est.fail.totalConfirmed + feeCalc.est.fail.inMempool + feeCalc.est.fail.leftMempool) > 0.0 ? 100 * feeCalc.est.fail.withinTarget / (feeCalc.est.fail.totalConfirmed + feeCalc.est.fail.inMempool + feeCalc.est.fail.leftMempool) : 0.0,
               feeCalc.est.fail.withinTarget, feeCalc.est.fail.totalConfirmed, feeCalc.est.fail.inMempool, feeCalc.est.fail.leftMempool);
-    return CreatedTransactionResult(tx, final_fees, nChangePosInOut);
+    return CreatedTransactionResult(tx, tx_fees, nChangePosInOut);
 }
 
 std::optional<CreatedTransactionResult> CreateTransaction(
