@@ -97,7 +97,7 @@ std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_poo
             (curr_waste > best_waste && (utxo_pool.at(0).fee - utxo_pool.at(0).long_term_fee) > 0)) { // Don't select things which we know will be more wasteful if the waste is increasing
             backtrack = true;
         } else if (curr_value >= selection_target) {       // Selected value is within range
-            CAmount excess = (curr_value - selection_target);
+            CAmount excess = (curr_value - selection_target); // Amount we'll drop to fees to avoid change
             curr_waste += excess;
             // Adding another UTXO after this check could bring the waste down if the long term fee is higher than the current fee.
             // However we are not going to explore that because this optimization for the waste is only done when we have hit our target
@@ -161,6 +161,7 @@ std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_poo
     }
     result.ComputeAndSetWaste(CAmount{0});
     assert(best_waste == result.GetWaste());
+    result.m_excess = best_excess;
 
     return result;
 }
@@ -437,7 +438,7 @@ CAmount SelectionResult::GetSelectionFee() const
         // Input fee must be defined because it's set in COutput construction
         fees += input.fee.value();
     }
-    return fees + excess;
+    return fees + m_excess;
 }
 
 const std::set<COutput>& SelectionResult::GetInputSet() const

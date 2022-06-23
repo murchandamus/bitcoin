@@ -285,11 +285,11 @@ private:
     bool m_use_effective{false};
     /** The computed waste */
     std::optional<CAmount> m_waste;
-    /** The amount the input set exceeds the target that will be discarded with the fee. Implies
-     * that the transaction will be changeless. */
-    CAmount excess{0};
 
 public:
+    /** The amount the input set exceeds the target that will be discarded with the fee. Implies
+     * that the transaction will be changeless. */
+    CAmount m_excess{0};
     /** The target the algorithm selected for. Note that this may not be equal to the recipient amount as it can include non-input fees */
     const CAmount m_target;
     /** The algorithm used to produce this result */
