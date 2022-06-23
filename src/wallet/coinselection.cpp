@@ -436,7 +436,7 @@ CAmount SelectionResult::GetSelectionFee() const
     CAmount fees = 0;
     for (COutput input : m_selected_inputs) {
         // Input fee must be defined because it's set in COutput construction
-        fees += input.fee.value();
+        fees += input.GetFee();
     }
     return fees + m_excess;
 }

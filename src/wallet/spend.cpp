@@ -666,7 +666,6 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
 
     // out variables, to be packed into returned result structure
     CTransactionRef tx;
-    CAmount nFeeRet;
     int nChangePosInOut = change_pos;
 
     FastRandomContext rng_fast;
@@ -755,12 +754,12 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     // For creating the change output now, we use the effective feerate.
     // For spending the change output in the future, we use the discard feerate for now.
     // So cost of change = (change output size * effective feerate) + (size of spending change output * discard feerate)
-    coin_selection_params.m_change_fee = coin_selection_params.m_effective_feerate.GetFee(coin_selection_params.change_output_size);
+    coin_selection_params.m_change_fee = coin_selection_params.m_effective_feerate.GetFee(coin_selection_params.change_output_size); //TODO: calculate the varInt for the output
     coin_selection_params.m_cost_of_change = coin_selection_params.m_discard_feerate.GetFee(coin_selection_params.change_spend_size) + coin_selection_params.m_change_fee;
 
     // vouts to the payees
     if (!coin_selection_params.m_subtract_fee_outputs) {
-        coin_selection_params.tx_noinputs_size = 11; // Static vsize overhead + outputs vsize. 4 nVersion, 4 nLocktime, 1 input count, 1 output count, 1 witness overhead (dummy, flag, stack size)
+        coin_selection_params.tx_noinputs_size = 11; // Static vsize overhead + outputs vsize. 4 nVersion, 4 nLocktime, 1 input count, 1 output count, 1 witness overhead (dummy, flag) // TODO: overpays by 0.5 vB
     }
     for (const auto& recipient : vecSend)
     {
@@ -800,24 +799,30 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     }
     TRACE5(coin_selection, selected_coins, wallet.GetName().c_str(), GetAlgorithmName(result->m_algo).c_str(), result->m_target, result->GetWaste(), result->GetSelectedValue());
 
-    // Always make a change output
-    // We will reduce the fee from this change output later, and remove the output if it is too small.
-    const CAmount change_and_fee = result->GetSelectedValue() - recipients_sum;
-    assert(change_and_fee >= 0);
-    CTxOut newTxOut(change_and_fee, scriptChange);
+    CAmount fees_before_change = result->GetSelectionFee() + not_input_fees;
+    CAmount final_fees{fees_before_change};
+    if (result->m_excess > 0) { // we want change
+        final_fees = fees_before_change + coin_selection_params.m_change_fee;
+        CAmount change_amount = result->GetSelectedValue() - recipients_sum - final_fees;
+        CTxOut newTxOut(change_amount, scriptChange);
 
-    if (nChangePosInOut == -1) {
-        // Insert change txn at random position:
-        nChangePosInOut = rng_fast.randrange(txNew.vout.size() + 1);
-    }
-    else if ((unsigned int)nChangePosInOut > txNew.vout.size())
-    {
-        error = _("Transaction change output index out of range");
-        return std::nullopt;
-    }
+        if (!IsDust(newTxOut, coin_selection_params.m_discard_feerate)) {
+            if (nChangePosInOut == -1) {
+                // Insert change txn at random position:
+                nChangePosInOut = rng_fast.randrange(txNew.vout.size() + 1);
+            }
+            else if ((unsigned int)nChangePosInOut > txNew.vout.size())
+            {
+                error = _("Transaction change output index out of range");
+                return std::nullopt;
+            }
 
-    assert(nChangePosInOut != -1);
-    auto change_position = txNew.vout.insert(txNew.vout.begin() + nChangePosInOut, newTxOut);
+            assert(nChangePosInOut != -1);
+            auto change_position = txNew.vout.insert(txNew.vout.begin() + nChangePosInOut, newTxOut);
+        } else {
+            final_fees += change_amount;
+        }
+    }
 
     // Shuffle selected coins and fill in final vin
     std::vector<COutput> selected_coins = result->GetShuffledInputVector();
@@ -843,42 +848,13 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
         error = _("Missing solving data for estimating transaction size");
         return std::nullopt;
     }
-    nFeeRet = coin_selection_params.m_effective_feerate.GetFee(nBytes);
+    CAmount sanity_lower_bound_fees = coin_selection_params.m_effective_feerate.GetFee(nBytes);
+    assert(final_fees >= sanity_lower_bound_fees);
 
-    // Subtract fee from the change output if not subtracting it from recipient outputs
-    CAmount fee_needed = nFeeRet;
-    if (!coin_selection_params.m_subtract_fee_outputs) {
-        change_position->nValue -= fee_needed;
-    }
-
-    // We want to drop the change to fees if:
-    // 1. The change output would be dust
-    // 2. The change is within the (almost) exact match window, i.e. it is less than or equal to the cost of the change output (cost_of_change)
-    CAmount change_amount = change_position->nValue;
-    if (IsDust(*change_position, coin_selection_params.m_discard_feerate) || change_amount <= coin_selection_params.m_cost_of_change)
-    {
-        nChangePosInOut = -1;
-        change_amount = 0;
-        txNew.vout.erase(change_position);
-
-        // Because we have dropped this change, the tx size and required fee will be different, so let's recalculate those
-        tx_sizes = CalculateMaximumSignedTxSize(CTransaction(txNew), &wallet, &coin_control);
-        nBytes = tx_sizes.vsize;
-        fee_needed = coin_selection_params.m_effective_feerate.GetFee(nBytes);
-    }
-
-    // The only time that fee_needed should be less than the amount available for fees (in change_and_fee - change_amount) is when
-    // we are subtracting the fee from the outputs. If this occurs at any other time, it is a bug.
-    assert(coin_selection_params.m_subtract_fee_outputs || fee_needed <= change_and_fee - change_amount);
-
-    // Update nFeeRet in case fee_needed changed due to dropping the change output
-    if (fee_needed <= change_and_fee - change_amount) {
-        nFeeRet = change_and_fee - change_amount;
-    }
 
     // Reduce output values for subtractFeeFromAmount
     if (coin_selection_params.m_subtract_fee_outputs) {
-        CAmount to_reduce = fee_needed + change_amount - change_and_fee;
+        CAmount to_reduce = final_fees;
         int i = 0;
         bool fFirst = true;
         for (const auto& recipient : vecSend)
@@ -910,7 +886,6 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
             }
             ++i;
         }
-        nFeeRet = fee_needed;
     }
 
     // Give up if change keypool ran out and change is required
@@ -934,7 +909,7 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
         return std::nullopt;
     }
 
-    if (nFeeRet > wallet.m_default_max_tx_fee) {
+    if (final_fees > wallet.m_default_max_tx_fee) {
         error = TransactionErrorString(TransactionError::MAX_FEE_EXCEEDED);
         return std::nullopt;
     }
@@ -953,14 +928,14 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     fee_calc_out = feeCalc;
 
     wallet.WalletLogPrintf("Fee Calculation: Fee:%d Bytes:%u Tgt:%d (requested %d) Reason:\"%s\" Decay %.5f: Estimation: (%g - %g) %.2f%% %.1f/(%.1f %d mem %.1f out) Fail: (%g - %g) %.2f%% %.1f/(%.1f %d mem %.1f out)\n",
-              nFeeRet, nBytes, feeCalc.returnedTarget, feeCalc.desiredTarget, StringForFeeReason(feeCalc.reason), feeCalc.est.decay,
+              final_fees, nBytes, feeCalc.returnedTarget, feeCalc.desiredTarget, StringForFeeReason(feeCalc.reason), feeCalc.est.decay,
               feeCalc.est.pass.start, feeCalc.est.pass.end,
               (feeCalc.est.pass.totalConfirmed + feeCalc.est.pass.inMempool + feeCalc.est.pass.leftMempool) > 0.0 ? 100 * feeCalc.est.pass.withinTarget / (feeCalc.est.pass.totalConfirmed + feeCalc.est.pass.inMempool + feeCalc.est.pass.leftMempool) : 0.0,
               feeCalc.est.pass.withinTarget, feeCalc.est.pass.totalConfirmed, feeCalc.est.pass.inMempool, feeCalc.est.pass.leftMempool,
               feeCalc.est.fail.start, feeCalc.est.fail.end,
               (feeCalc.est.fail.totalConfirmed + feeCalc.est.fail.inMempool + feeCalc.est.fail.leftMempool) > 0.0 ? 100 * feeCalc.est.fail.withinTarget / (feeCalc.est.fail.totalConfirmed + feeCalc.est.fail.inMempool + feeCalc.est.fail.leftMempool) : 0.0,
               feeCalc.est.fail.withinTarget, feeCalc.est.fail.totalConfirmed, feeCalc.est.fail.inMempool, feeCalc.est.fail.leftMempool);
-    return CreatedTransactionResult(tx, nFeeRet, nChangePosInOut);
+    return CreatedTransactionResult(tx, final_fees, nChangePosInOut);
 }
 
 std::optional<CreatedTransactionResult> CreateTransaction(
