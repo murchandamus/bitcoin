@@ -749,12 +749,15 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
         return std::nullopt;
     }
 
+    // The output counter is encoded as a CompactSize. If adding a change output would increase the output counter's encoding length, increase change_output_size.
+    coin_selection_params.change_output_size += GetSizeOfCompactSize(txNew.vout.size() + 1) - GetSizeOfCompactSize(txNew.vout.size());
+
     // Calculate the cost of change
     // Cost of change is the cost of creating the change output + cost of spending the change output in the future.
     // For creating the change output now, we use the effective feerate.
     // For spending the change output in the future, we use the discard feerate for now.
     // So cost of change = (change output size * effective feerate) + (size of spending change output * discard feerate)
-    coin_selection_params.m_change_fee = coin_selection_params.m_effective_feerate.GetFee(coin_selection_params.change_output_size); //TODO: calculate the varInt for the output
+    coin_selection_params.m_change_fee = coin_selection_params.m_effective_feerate.GetFee(coin_selection_params.change_output_size);
     coin_selection_params.m_cost_of_change = coin_selection_params.m_discard_feerate.GetFee(coin_selection_params.change_spend_size) + coin_selection_params.m_change_fee;
 
     // vouts to the payees
