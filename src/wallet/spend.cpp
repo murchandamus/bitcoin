@@ -761,9 +761,7 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     coin_selection_params.m_cost_of_change = coin_selection_params.m_discard_feerate.GetFee(coin_selection_params.change_spend_size) + coin_selection_params.m_change_fee;
 
     // vouts to the payees
-    if (!coin_selection_params.m_subtract_fee_outputs) {
-        coin_selection_params.tx_noinputs_size = 11; // Static vsize overhead + outputs vsize. 4 nVersion, 4 nLocktime, 1 input count, 1 output count, 1 witness overhead (dummy, flag) // TODO: overpays by 0.5 vB
-    }
+    coin_selection_params.tx_noinputs_size = 11; // Static vsize overhead + outputs vsize. 4 nVersion, 4 nLocktime, 1 input count, 1 output count, 1 witness overhead (dummy, flag) // TODO: overpays by 0.5 vB
     for (const auto& recipient : vecSend)
     {
         CTxOut txout(recipient.nAmount, recipient.scriptPubKey);
