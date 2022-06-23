@@ -287,7 +287,7 @@ private:
     std::optional<CAmount> m_waste;
     /** The amount the input set exceeds the target that will be discarded with the fee. Implies
      * that the transaction will be changeless. */
-    CAmount excess;
+    CAmount excess{0};
 
 public:
     /** The target the algorithm selected for. Note that this may not be equal to the recipient amount as it can include non-input fees */

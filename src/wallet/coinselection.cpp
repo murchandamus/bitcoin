@@ -86,6 +86,7 @@ std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_poo
     CAmount curr_waste = 0;
     std::vector<size_t> best_selection;
     CAmount best_waste = MAX_MONEY;
+    CAmount best_excess{0};
 
     // Depth First search loop for choosing the UTXOs
     for (size_t curr_try = 0, utxo_pool_index = 0; curr_try < TOTAL_TRIES; ++curr_try, ++utxo_pool_index) {
@@ -96,7 +97,8 @@ std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_poo
             (curr_waste > best_waste && (utxo_pool.at(0).fee - utxo_pool.at(0).long_term_fee) > 0)) { // Don't select things which we know will be more wasteful if the waste is increasing
             backtrack = true;
         } else if (curr_value >= selection_target) {       // Selected value is within range
-            curr_waste += (curr_value - selection_target); // This is the excess value which is added to the waste for the below comparison
+            CAmount excess = (curr_value - selection_target);
+            curr_waste += excess;
             // Adding another UTXO after this check could bring the waste down if the long term fee is higher than the current fee.
             // However we are not going to explore that because this optimization for the waste is only done when we have hit our target
             // value. Adding any more UTXOs will be just burning the UTXO; it will go entirely to fees. Thus we aren't going to
@@ -104,6 +106,7 @@ std::optional<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_poo
             if (curr_waste <= best_waste) {
                 best_selection = curr_selection;
                 best_waste = curr_waste;
+                best_excess = excess;
             }
             curr_waste -= (curr_value - selection_target); // Remove the excess value as we will be selecting different coins now
             backtrack = true;
@@ -425,6 +428,16 @@ void SelectionResult::AddInput(const OutputGroup& group)
 {
     util::insert(m_selected_inputs, group.m_outputs);
     m_use_effective = !group.m_subtract_fee_outputs;
+}
+
+CAmount SelectionResult::GetSelectionFee() const
+{
+    CAmount fees = 0;
+    for (COutput input : m_selected_inputs) {
+        // Input fee must be defined because it's set in COutput construction
+        fees += input.fee.value();
+    }
+    return fees + excess;
 }
 
 const std::set<COutput>& SelectionResult::GetInputSet() const
