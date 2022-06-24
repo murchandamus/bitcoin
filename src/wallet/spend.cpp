@@ -756,9 +756,7 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
         CTxOut txout(recipient.nAmount, recipient.scriptPubKey);
 
         // Include the fee cost for outputs.
-        if (!coin_selection_params.m_subtract_fee_outputs) {
-            coin_selection_params.tx_noinputs_size += ::GetSerializeSize(txout, PROTOCOL_VERSION);
-        }
+        coin_selection_params.tx_noinputs_size += ::GetSerializeSize(txout, PROTOCOL_VERSION);
 
         if (IsDust(txout, wallet.chain().relayDustFee()))
         {
@@ -782,10 +780,10 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     // Include the fees for things that aren't inputs, excluding the change output
     const CAmount not_input_fees = coin_selection_params.m_effective_feerate.GetFee(coin_selection_params.tx_noinputs_size);
     CAmount selection_target = 0;
-    if (!coin_selection_params.m_subtract_fee_outputs) {
-        selection_target = recipients_sum + not_input_fees;
-    } else {
+    if (coin_selection_params.m_subtract_fee_outputs) {
         selection_target = recipients_sum;
+    } else {
+        selection_target = recipients_sum + not_input_fees;
     }
 
     // Get available coins
@@ -806,9 +804,13 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     TRACE5(coin_selection, selected_coins, wallet.GetName().c_str(), GetAlgorithmName(result->m_algo).c_str(), result->m_target, result->GetWaste(), result->GetSelectedValue());
 
     CAmount tx_fees{result->GetSelectionFee() + not_input_fees}; // result->GetSelectionFee() includes excess if present
-    if (!result->m_excess || result->m_excess == 0) { // excess indicates a changeless transaction
-        CAmount change_budget = result->GetSelectedValue() - recipients_sum - tx_fees;
-        CAmount change_amount = change_budget - coin_selection_params.m_change_fee;
+    if (!result->m_excess) { // absence of excess means that we create change
+        CAmount change_budget = coin_selection_params.m_subtract_fee_outputs
+            ? result->GetSelectedValue() - recipients_sum
+            : result->GetSelectedValue() - recipients_sum - tx_fees;
+        CAmount change_amount = coin_selection_params.m_subtract_fee_outputs
+            ? change_budget
+            : change_budget - coin_selection_params.m_change_fee;
 
         CTxOut newTxOut;
         if (change_amount >= 0) {
@@ -832,6 +834,10 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
             // Drop budget for change to fees when dust
             tx_fees += change_amount;
             tx_fees += coin_selection_params.m_change_fee;
+        }
+    } else { // excess indicates a changeless transaction
+        if(coin_selection_params.m_subtract_fee_outputs) {
+            tx_fees -= result->m_excess;
         }
     }
 
