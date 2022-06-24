@@ -781,7 +781,12 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
 
     // Include the fees for things that aren't inputs, excluding the change output
     const CAmount not_input_fees = coin_selection_params.m_effective_feerate.GetFee(coin_selection_params.tx_noinputs_size);
-    CAmount selection_target = recipients_sum + not_input_fees;
+    CAmount selection_target = 0;
+    if (!coin_selection_params.m_subtract_fee_outputs) {
+        selection_target = recipients_sum + not_input_fees;
+    } else {
+        selection_target = recipients_sum;
+    }
 
     // Get available coins
     auto res_available_coins = AvailableCoins(wallet,
@@ -800,13 +805,17 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
     }
     TRACE5(coin_selection, selected_coins, wallet.GetName().c_str(), GetAlgorithmName(result->m_algo).c_str(), result->m_target, result->GetWaste(), result->GetSelectedValue());
 
-    CAmount tx_fees{result->GetSelectionFee() + not_input_fees};
-    if (result->m_excess > 0) { // we want change
-        tx_fees += coin_selection_params.m_change_fee;
-        CAmount change_amount = result->GetSelectedValue() - recipients_sum - tx_fees;
-        CTxOut newTxOut(change_amount, scriptChange);
+    CAmount tx_fees{result->GetSelectionFee() + not_input_fees}; // result->GetSelectionFee() includes excess if present
+    if (!result->m_excess || result->m_excess == 0) { // excess indicates a changeless transaction
+        CAmount change_budget = result->GetSelectedValue() - recipients_sum - tx_fees;
+        CAmount change_amount = change_budget - coin_selection_params.m_change_fee;
 
-        if (!IsDust(newTxOut, coin_selection_params.m_discard_feerate)) {
+        CTxOut newTxOut;
+        if (change_amount >= 0) {
+            newTxOut = CTxOut{change_amount, scriptChange};
+        }
+        if (change_amount >= 0 && !IsDust(newTxOut, coin_selection_params.m_discard_feerate)) {
+            tx_fees += coin_selection_params.m_change_fee; // add change output fee if change is viable
             if (nChangePosInOut == -1) {
                 // Insert change txn at random position:
                 nChangePosInOut = rng_fast.randrange(txNew.vout.size() + 1);
@@ -819,8 +828,10 @@ static std::optional<CreatedTransactionResult> CreateTransactionInternal(
 
             assert(nChangePosInOut != -1);
             txNew.vout.insert(txNew.vout.begin() + nChangePosInOut, newTxOut);
-        } else {
+        } else if (!coin_selection_params.m_subtract_fee_outputs) { // in case of SFFO, leave change budget to recipient instead of deducting and dumping to fees
+            // Drop budget for change to fees when dust
             tx_fees += change_amount;
+            tx_fees += coin_selection_params.m_change_fee;
         }
     }
 
