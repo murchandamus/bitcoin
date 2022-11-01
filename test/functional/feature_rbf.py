@@ -637,14 +637,14 @@ class ReplaceByFeeTest(BitcoinTestFramework):
             from_node=self.nodes[0],
             utxo_to_spend=confirmed_utxo,
             sequence=MAX_BIP125_RBF_SEQUENCE,
-            fee_rate=Decimal('0.01'),
+            fee_rate=Decimal('0.0001'),
         )
         assert_equal(True, self.nodes[0].getmempoolentry(optin_parent_tx['txid'])['bip125-replaceable'])
 
         replacement_parent_tx = self.wallet.create_self_transfer(
             utxo_to_spend=confirmed_utxo,
             sequence=MAX_BIP125_RBF_SEQUENCE,
-            fee_rate=Decimal('0.02'),
+            fee_rate=Decimal('0.0002'),
         )
 
         # Test if parent tx can be replaced.
@@ -659,7 +659,7 @@ class ReplaceByFeeTest(BitcoinTestFramework):
             from_node=self.nodes[0],
             utxo_to_spend=parent_utxo,
             sequence=SEQUENCE_FINAL,
-            fee_rate=Decimal('0.01'),
+            fee_rate=Decimal('0.0001'),
         )
 
         # Reports true due to inheritance
@@ -668,7 +668,7 @@ class ReplaceByFeeTest(BitcoinTestFramework):
         replacement_child_tx = self.wallet.create_self_transfer(
             utxo_to_spend=parent_utxo,
             sequence=SEQUENCE_FINAL,
-            fee_rate=Decimal('0.02'),
+            fee_rate=Decimal('0.0002'),
         )
 
         # Broadcast replacement child tx
