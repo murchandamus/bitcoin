@@ -158,7 +158,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         tx2 = self.wallet.create_self_transfer(utxo_to_spend=tx1_out_21)['tx']
         tx2.vout = [CTxOut(int(Decimal('20.99') * COIN), CScript([OP_RETURN] + [OP_FALSE] * 30))]
         tx2_hex = tx2.serialize().hex()
-        self.nodes[0].sendrawtransaction(tx2_hex)
+        self.nodes[0].sendrawtransaction(tx2_hex, 0.1)
 
         # Include both txs in a block
         self.generate(self.nodes[0], 1)
