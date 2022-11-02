@@ -313,14 +313,15 @@ class SendallTest(BitcoinTestFramework):
         self.log.info("Test that sendall fails if resulting transaction is too large")
         # create many inputs
         outputs = {self.wallet.getnewaddress(): 0.000025 for _ in range(1600)}
-        self.def_wallet.sendmany(amounts=outputs)
+        self.def_wallet.sendmany(amounts=outputs, fee_rate=1)
         self.generate(self.nodes[0], 1)
 
         assert_raises_rpc_error(
                 -4,
                 "Transaction too large.",
                 self.wallet.sendall,
-                recipients=[self.remainder_target])
+                recipients=[self.remainder_target],
+                fee_rate=1)
 
     def run_test(self):
         self.nodes[0].createwallet("activewallet")
