@@ -409,7 +409,7 @@ class ImportDescriptorsTest(BitcoinTestFramework):
                      ismine=True)
         txid = w0.sendtoaddress(address, 49.99995540)
         self.generatetoaddress(self.nodes[0], 6, w0.getnewaddress())
-        tx = wpriv.createrawtransaction([{"txid": txid, "vout": 0}], {w0.getnewaddress(): 49.999})
+        tx = wpriv.createrawtransaction([{"txid": txid, "vout": 0}], {w0.getnewaddress(): 49.9999})
         signed_tx = wpriv.signrawtransactionwithwallet(tx)
         w1.sendrawtransaction(signed_tx['hex'])
 
@@ -550,7 +550,7 @@ class ImportDescriptorsTest(BitcoinTestFramework):
         assert_equal(res[1]['success'], True)
         assert_equal(res[1]['warnings'][0], 'Not all private keys provided. Some wallet functionality may return unexpected errors')
 
-        rawtx = self.nodes[1].createrawtransaction([{'txid': txid, 'vout': vout}], {w0.getnewaddress(): 9.999})
+        rawtx = self.nodes[1].createrawtransaction([{'txid': txid, 'vout': vout}], {w0.getnewaddress(): 9.99999})
         tx_signed_1 = wmulti_priv1.signrawtransactionwithwallet(rawtx)
         assert_equal(tx_signed_1['complete'], False)
         tx_signed_2 = wmulti_priv2.signrawtransactionwithwallet(tx_signed_1['hex'])
@@ -644,7 +644,7 @@ class ImportDescriptorsTest(BitcoinTestFramework):
             }])
         assert_equal(res[0]['success'], True)
 
-        rawtx = self.nodes[1].createrawtransaction([{'txid': txid2, 'vout': vout2}], {w0.getnewaddress(): 9.999})
+        rawtx = self.nodes[1].createrawtransaction([{'txid': txid2, 'vout': vout2}], {w0.getnewaddress(): 9.99999})
         tx = wmulti_priv3.signrawtransactionwithwallet(rawtx)
         assert_equal(tx['complete'], True)
         self.nodes[1].sendrawtransaction(tx['hex'])
