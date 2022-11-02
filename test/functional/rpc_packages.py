@@ -239,8 +239,8 @@ class RPCPackagesTest(BitcoinTestFramework):
         node = self.nodes[0]
         prevtx = self.coins.pop()
         inputs = [{"txid": prevtx["txid"], "vout": 0}]
-        output1 = {node.get_deterministic_priv_key().address: 50 - 0.00125}
-        output2 = {ADDRESS_BCRT1_P2WSH_OP_TRUE: 50 - 0.00125}
+        output1 = {node.get_deterministic_priv_key().address: 50 - 0.000125}
+        output2 = {ADDRESS_BCRT1_P2WSH_OP_TRUE: 50 - 0.000125}
 
         # tx1 and tx2 share the same inputs
         rawtx1 = node.createrawtransaction(inputs, output1)
@@ -274,7 +274,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         node = self.nodes[0]
         coin = self.coins.pop()
         inputs = [{"txid": coin["txid"], "vout": 0, "sequence": MAX_BIP125_RBF_SEQUENCE}]
-        fee = Decimal('0.00125000')
+        fee = Decimal('0.00012500')
         output = {node.get_deterministic_priv_key().address: 50 - fee}
         raw_replaceable_tx = node.createrawtransaction(inputs, output)
         signed_replaceable_tx = node.signrawtransactionwithkey(hexstring=raw_replaceable_tx, privkeys=self.privkeys)
