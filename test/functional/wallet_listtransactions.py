@@ -146,7 +146,7 @@ class ListTransactionsTest(BitcoinTestFramework):
 
         # Create tx2 using createrawtransaction
         inputs = [{"txid": utxo_to_use["txid"], "vout": utxo_to_use["vout"]}]
-        outputs = {self.nodes[0].getnewaddress(): 0.999}
+        outputs = {self.nodes[0].getnewaddress(): 0.9999}
         tx2 = self.nodes[1].createrawtransaction(inputs=inputs, outputs=outputs, replaceable=False)
         tx2_signed = self.nodes[1].signrawtransactionwithwallet(tx2)["hex"]
         txid_2 = self.nodes[1].sendrawtransaction(tx2_signed)
@@ -161,7 +161,7 @@ class ListTransactionsTest(BitcoinTestFramework):
         # Tx3 will opt-in to RBF
         utxo_to_use = get_unconfirmed_utxo_entry(self.nodes[0], txid_2)
         inputs = [{"txid": txid_2, "vout": utxo_to_use["vout"]}]
-        outputs = {self.nodes[1].getnewaddress(): 0.998}
+        outputs = {self.nodes[1].getnewaddress(): 0.9998}
         tx3 = self.nodes[0].createrawtransaction(inputs, outputs)
         tx3_modified = tx_from_hex(tx3)
         tx3_modified.vin[0].nSequence = 0
@@ -178,7 +178,7 @@ class ListTransactionsTest(BitcoinTestFramework):
         # that does.
         utxo_to_use = get_unconfirmed_utxo_entry(self.nodes[1], txid_3)
         inputs = [{"txid": txid_3, "vout": utxo_to_use["vout"]}]
-        outputs = {self.nodes[0].getnewaddress(): 0.997}
+        outputs = {self.nodes[0].getnewaddress(): 0.9997}
         tx4 = self.nodes[1].createrawtransaction(inputs=inputs, outputs=outputs, replaceable=False)
         tx4_signed = self.nodes[1].signrawtransactionwithwallet(tx4)["hex"]
         txid_4 = self.nodes[1].sendrawtransaction(tx4_signed)
@@ -191,7 +191,7 @@ class ListTransactionsTest(BitcoinTestFramework):
         self.log.info("Test tx with unknown RBF state (bip125-replaceable=unknown)")
         # Replace tx3, and check that tx4 becomes unknown
         tx3_b = tx3_modified
-        tx3_b.vout[0].nValue -= int(Decimal("0.004") * COIN)  # bump the fee
+        tx3_b.vout[0].nValue -= int(Decimal("0.0004") * COIN)  # bump the fee
         tx3_b = tx3_b.serialize().hex()
         tx3_b_signed = self.nodes[0].signrawtransactionwithwallet(tx3_b)['hex']
         txid_3b = self.nodes[0].sendrawtransaction(tx3_b_signed, 0)
