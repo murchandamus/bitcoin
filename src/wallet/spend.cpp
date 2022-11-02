@@ -151,6 +151,8 @@ util::Result<PreSelectedInputs> FetchSelectedInputs(const CWallet& wallet, const
     PreSelectedInputs result;
     std::vector<COutPoint> vPresetInputs;
     coin_control.ListSelected(vPresetInputs);
+
+    std::map<COutPoint, CAmount> map_of_bump_fees = wallet.chain().CalculateBumpFees(vPresetInputs, coin_selection_params.m_effective_feerate);
     for (const COutPoint& outpoint : vPresetInputs) {
         int input_bytes = -1;
         CTxOut txout;
@@ -183,6 +185,7 @@ util::Result<PreSelectedInputs> FetchSelectedInputs(const CWallet& wallet, const
 
         /* Set some defaults for depth, spendable, solvable, safe, time, and from_me as these don't matter for preset inputs since no selection is being done. */
         COutput output(outpoint, txout, /*depth=*/ 0, input_bytes, /*spendable=*/ true, /*solvable=*/ true, /*safe=*/ true, /*time=*/ 0, /*from_me=*/ false, coin_selection_params.m_effective_feerate);
+        output.ApplyBumpFee(map_of_bump_fees.at(output.outpoint));
         result.Insert(output, coin_selection_params.m_subtract_fee_outputs);
     }
     return result;
@@ -206,6 +209,7 @@ CoinsResult AvailableCoins(const CWallet& wallet,
     const int min_depth = {coinControl ? coinControl->m_min_depth : DEFAULT_MIN_DEPTH};
     const int max_depth = {coinControl ? coinControl->m_max_depth : DEFAULT_MAX_DEPTH};
     const bool only_safe = {coinControl ? !coinControl->m_include_unsafe_inputs : true};
+    std::vector<COutPoint> outpoints;
 
     std::set<uint256> trusted_parents;
     for (const auto& entry : wallet.mapWallet)
@@ -325,6 +329,9 @@ CoinsResult AvailableCoins(const CWallet& wallet,
             result.Add(GetOutputType(type, is_from_p2sh),
                        COutput(outpoint, output, nDepth, input_bytes, spendable, solvable, safeTx, wtx.GetTxTime(), tx_from_me, feerate));
 
+            outpoints.push_back(outpoint);
+
+
             // Cache total amount as we go
             result.total_amount += output.nValue;
             // Checks the sum amount of all UTXO's.
@@ -340,6 +347,18 @@ CoinsResult AvailableCoins(const CWallet& wallet,
             }
         }
     }
+
+    if (feerate.has_value()) {
+        std::map<COutPoint, CAmount> map_of_bump_fees = wallet.chain().CalculateBumpFees(outpoints, feerate.value());
+
+        for (auto& [_, outputs] : result.coins) {
+            for (auto& output :  outputs) {
+                CAmount bump_fee = map_of_bump_fees.at(output.outpoint);
+                output.ApplyBumpFee(bump_fee);
+            }
+        }
+    }
+
 
     return result;
 }
@@ -939,7 +958,9 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     // and in the spirit of "smallest possible change from prior
     // behavior."
     const uint32_t nSequence{coin_control.m_signal_bip125_rbf.value_or(wallet.m_signal_rbf) ? MAX_BIP125_RBF_SEQUENCE : CTxIn::MAX_SEQUENCE_NONFINAL};
+    CAmount total_bump_fees{0};
     for (const auto& coin : selected_coins) {
+        total_bump_fees += coin.ancestor_bump_fees;
         txNew.vin.push_back(CTxIn(coin.outpoint, CScript(), nSequence));
     }
     DiscourageFeeSniping(txNew, rng_fast, wallet.chain(), wallet.GetLastBlockHash(), wallet.GetLastBlockHeight());
@@ -950,7 +971,7 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     if (nBytes == -1) {
         return util::Error{_("Missing solving data for estimating transaction size")};
     }
-    CAmount fee_needed = coin_selection_params.m_effective_feerate.GetFee(nBytes);
+    CAmount fee_needed = coin_selection_params.m_effective_feerate.GetFee(nBytes) + total_bump_fees;
     nFeeRet = result->GetSelectedValue() - recipients_sum - change_amount;
 
     // The only time that fee_needed should be less than the amount available for fees is when

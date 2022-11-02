@@ -294,6 +294,7 @@ BASE_SCRIPTS = [
     'wallet_sendall.py --legacy-wallet',
     'wallet_sendall.py --descriptors',
     'wallet_create_tx.py --descriptors',
+    'wallet_spend_unconfirmed.py',
     'wallet_taproot.py',
     'wallet_inactive_hdchains.py',
     'p2p_fingerprint.py',
