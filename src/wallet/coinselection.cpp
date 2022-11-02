@@ -459,7 +459,7 @@ CAmount SelectionResult::GetSelectionWaste(CAmount change_cost, CAmount target, 
     CAmount selected_effective_value = 0;
     for (const auto& coin_ptr : m_selected_inputs) {
         const COutput& coin = *coin_ptr;
-        waste += coin.GetFee() - coin.long_term_fee;
+        waste += coin.GetFee() + coin.ancestor_bump_fees - coin.long_term_fee;
         selected_effective_value += use_effective_value ? coin.GetEffectiveValue() : coin.txout.nValue;
     }
 
@@ -512,6 +512,12 @@ CAmount SelectionResult::GetSelectedValue() const
 CAmount SelectionResult::GetSelectedEffectiveValue() const
 {
     return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin->GetEffectiveValue(); });
+}
+
+
+CAmount SelectionResult::GetTotalBumpFees() const
+{
+    return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin->ancestor_bump_fees; });
 }
 
 void SelectionResult::Clear()
