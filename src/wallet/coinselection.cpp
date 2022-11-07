@@ -7,6 +7,7 @@
 #include <common/system.h>
 #include <consensus/amount.h>
 #include <consensus/consensus.h>
+#include <interfaces/chain.h>
 #include <logging.h>
 #include <policy/feerate.h>
 #include <util/check.h>
@@ -459,9 +460,11 @@ CAmount SelectionResult::GetSelectionWaste(CAmount change_cost, CAmount target, 
     CAmount selected_effective_value = 0;
     for (const auto& coin_ptr : m_selected_inputs) {
         const COutput& coin = *coin_ptr;
-        waste += coin.GetFee() + coin.ancestor_bump_fees - coin.long_term_fee;
-        selected_effective_value += use_effective_value ? coin.GetEffectiveValue() : coin.txout.nValue;
+        waste += coin.GetFee() - coin.long_term_fee;
     }
+    // Bump fee of whole selection may diverge from sum of individual bump fees
+    waste += GetTotalBumpFees();
+    selected_effective_value += use_effective_value ? GetSelectedEffectiveValue() : GetSelectedValue();
 
     if (change_cost) {
         // Consider the cost of making change and spending it in the future
@@ -488,6 +491,14 @@ CAmount GenerateChangeTarget(const CAmount payment_value, const CAmount change_f
     }
 }
 
+void SelectionResult::SetBumpFeeDiscount(const CAmount discount)
+{
+    // Overlapping ancestry can only lower the fees, not increase them
+    assert (discount >= 0);
+    bump_fee_group_discount = discount;
+}
+
+
 void SelectionResult::ComputeAndSetWaste(const CAmount min_viable_change, const CAmount change_cost, const CAmount change_fee)
 {
     const CAmount change = GetChange(min_viable_change, change_fee);
@@ -511,13 +522,18 @@ CAmount SelectionResult::GetSelectedValue() const
 
 CAmount SelectionResult::GetSelectedEffectiveValue() const
 {
-    return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin->GetEffectiveValue(); });
+    return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin->GetEffectiveValue(); }) + bump_fee_group_discount;
+}
+
+CAmount SelectionResult::GetBumpFeeDiscount() const
+{
+    return bump_fee_group_discount;
 }
 
 
 CAmount SelectionResult::GetTotalBumpFees() const
 {
-    return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin->ancestor_bump_fees; });
+    return std::accumulate(m_selected_inputs.cbegin(), m_selected_inputs.cend(), CAmount{0}, [](CAmount sum, const auto& coin) { return sum + coin->ancestor_bump_fees; }) - bump_fee_group_discount;
 }
 
 void SelectionResult::Clear()
