@@ -54,6 +54,9 @@ struct IteratorComparator
  * mempool transactions, ignoring consensus rules, to calculate mining scores. */
 class MiniMiner
 {
+    // Original outpoints requested
+    std::vector<COutPoint> requested_outpoints;
+
     // Set once per lifetime, fill in during initialization.
     // txids of to-be-replaced transactions
     std::set<uint256> to_be_replaced;
@@ -97,6 +100,10 @@ public:
      * did not make it into the block, calculate the cost of bumping those transactions (and their
      * ancestors) to the minimum feerate. */
     std::map<COutPoint, CAmount> CalculateBumpFees(const CFeeRate& target_feerate);
+
+    /** Construct a new block template and, calculate the cost of bumping all transactions that did
+     * not make it into the block to the target feerate. */
+    CAmount CalculateTotalBumpFees(const CFeeRate& target_feerate);
 };
 } // namespace node
 

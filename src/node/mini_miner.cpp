@@ -20,6 +20,7 @@ namespace node {
 MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& outpoints)
 {
     LOCK(mempool.cs);
+    requested_outpoints = outpoints;
     // Find which outpoints to calculate bump fees for.
     // Anything that's spent by the mempool is to-be-replaced
     // Anything otherwise unavailable just has a bump fee of 0
@@ -216,5 +217,49 @@ std::map<COutPoint, CAmount> MiniMiner::CalculateBumpFees(const CFeeRate& target
         }
     }
     return this->bump_fees;
+}
+
+CAmount MiniMiner::CalculateTotalBumpFees(const CFeeRate& target_feerate)
+{
+    // Build a block template until the target feerate is hit.
+    BuildMockTemplate(target_feerate);
+    assert(in_block.empty() || CFeeRate(total_fees, total_vsize) >= target_feerate);
+
+    // All remaining ancestors that are not part of in_block must be bumped, but no other relatives (e.g. siblings, niblings, …)
+    std::set<MockEntryMap::iterator, IteratorComparator> ancestors;
+    std::set<MockEntryMap::iterator, IteratorComparator> to_process;
+
+    for (const auto& outpoint : requested_outpoints) {
+        const auto& txid = outpoint.hash;
+        // Skip any ancestors that have a higher minerscore already
+        if (in_block.find(txid) != in_block.end()) continue;
+        auto iter = entries_by_txid.find(outpoint.hash);
+        assert(iter != entries_by_txid.end());
+        to_process.insert(iter);
+        ancestors.insert(iter);
+    }
+
+    while (!to_process.empty()) {
+        auto iter = to_process.begin();
+        assert(iter != to_process.end());
+        const CTransaction& tx = (*iter)->second.GetTx();
+        for (const auto& input : tx.vin) {
+            if (auto parent_it{entries_by_txid.find(input.prevout.hash)}; parent_it != entries_by_txid.end()) {
+                to_process.insert(parent_it);
+                ancestors.insert(parent_it);
+            }
+        }
+        to_process.erase(iter);
+    }
+
+    CAmount total_fees = 0;
+    CAmount total_vsize = 0;
+    for (const auto& anc : ancestors) {
+        total_fees += anc->second.GetModifiedFee();
+        total_vsize += anc->second.GetTxSize();
+    }
+
+    CAmount target_fee = target_feerate.GetFee(total_vsize);
+    return target_fee - total_fees;
 }
 } // namespace node
