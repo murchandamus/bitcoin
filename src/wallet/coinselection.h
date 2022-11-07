@@ -328,6 +328,8 @@ private:
             throw std::runtime_error(STR_INTERNAL_BUG("Shared UTXOs among selection results"));
         }
     }
+    /** How much individual inputs overestimated the bump fees for the shared ancestry */
+    CAmount bump_fee_group_discount{0};
 
 public:
     explicit SelectionResult(const CAmount target, SelectionAlgorithm algo)
@@ -340,10 +342,15 @@ public:
 
     [[nodiscard]] CAmount GetSelectedEffectiveValue() const;
 
+    [[nodiscard]] CAmount GetBumpFeeDiscount() const;
+
     void Clear();
 
     void AddInput(const OutputGroup& group);
     void AddInputs(const std::set<COutput>& inputs, bool subtract_fee_outputs);
+
+    /** How much individual inputs overestimated the bump fees for shared ancestries */
+    void SetBumpFeeDiscount(const CAmount discount);
 
     /** Calculates and stores the waste for this selection via GetSelectionWaste */
     void ComputeAndSetWaste(const CAmount min_viable_change, const CAmount change_cost, const CAmount change_fee);

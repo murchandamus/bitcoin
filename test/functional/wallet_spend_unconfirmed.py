@@ -326,6 +326,28 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
 
+    def test_target_feerate_unconfirmed_low_overlapping_ancestry(self):
+        self.log.info("Start test where two UTXOs have overlapping ancestry")
+        wallet = self.setup_and_fund_wallet("overlapping_ancestry_wallet")
+
+        parent_txid = wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=1)
+        two_output_parent_tx = wallet.gettransaction(txid=parent_txid, verbose=True)
+
+        self.assert_undershoots_target(two_output_parent_tx)
+
+        # spend both outputs from parent transaction
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=1.5, fee_rate=self.target_fee_rate)
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
+
+        self.assert_beats_target(ancestor_aware_tx)
+        resulting_ancestry_fee_rate = self.calc_set_fee_rate([two_output_parent_tx, ancestor_aware_tx])
+        assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.1, resulting_ancestry_fee_rate)
+
+        self.generate(self.nodes[0], 1)
+        wallet.unloadwallet()
+
+
     def test_sibling_tx_gets_ignored(self):
         self.log.info("Start test where a low-fee sibling tx gets created and check that bumping ignores it")
         wallet = self.setup_and_fund_wallet("ignore-sibling")
@@ -425,6 +447,9 @@ class UnconfirmedInputTest(BitcoinTestFramework):
 
         # Actual test: Check that RBFing a transaction with unconfirmed input gets the right feerate
         self.test_rbf_bumping()
+
+        # Actual test: Spend two UTXOs with overlapping ancestry, ensure not bumping twice
+        self.test_target_feerate_unconfirmed_low_overlapping_ancestry()
 
         # Actual test: Create sibling tx with low fee and check it gets ignored
         self.test_sibling_tx_gets_ignored()
