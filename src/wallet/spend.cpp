@@ -581,6 +581,25 @@ std::optional<SelectionResult> ChooseSelectionResult(const CWallet& wallet, cons
         return std::nullopt;
     }
 
+    // If the chosen input set has unconfirmed inputs, check for synergies from overlapping ancestry
+    for (auto& result : results) {
+        std::vector<COutPoint> outpoints;
+        CAmount summed_bump_fees = 0;
+        std::set<COutput> coins = result.GetInputSet();
+        for (auto& coin : coins) {
+            if (coin.depth > 0) continue; // Bump fees only exist for unconfirmed inputs
+            outpoints.push_back(coin.outpoint);
+            summed_bump_fees += coin.ancestor_bump_fees;
+        }
+        CAmount grouped_bump_fees = wallet.chain().CalculateTotalBumpFees(outpoints, coin_selection_params.m_effective_feerate);
+        CAmount bump_fee_overestimate = summed_bump_fees - grouped_bump_fees;
+        if (bump_fee_overestimate) {
+            result.SetBumpFeeDiscount(bump_fee_overestimate);
+            // Update waste
+            result.ComputeAndSetWaste(coin_selection_params.min_viable_change, coin_selection_params.m_cost_of_change, coin_selection_params.m_change_fee);
+        }
+    }
+
     // Choose the result with the least waste
     // If the waste is the same, choose the one which spends more inputs.
     auto& best_result = *std::min_element(results.begin(), results.end());
@@ -963,6 +982,7 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
         total_bump_fees += coin.ancestor_bump_fees;
         txNew.vin.push_back(CTxIn(coin.outpoint, CScript(), nSequence));
     }
+    total_bump_fees -= result->GetBumpFeeDiscount();
     DiscourageFeeSniping(txNew, rng_fast, wallet.chain(), wallet.GetLastBlockHash(), wallet.GetLastBlockHeight());
 
     // Calculate the transaction fee
