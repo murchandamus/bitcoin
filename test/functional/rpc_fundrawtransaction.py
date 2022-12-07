@@ -789,9 +789,9 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         # With no arguments passed, expect fee of 141 satoshis.
         assert_approx(node.fundrawtransaction(rawtx)["fee"], vexp=0.00000141, vspan=0.00000001)
-        # Expect fee to be 10,000x higher when an explicit fee rate 10,000x greater is specified.
-        result = node.fundrawtransaction(rawtx, {"fee_rate": 10000})
-        assert_approx(result["fee"], vexp=0.0141, vspan=0.0001)
+        # Expect fee to be 10x higher when an explicit fee rate 10x greater is specified.
+        result = node.fundrawtransaction(rawtx, {"fee_rate": 10})
+        assert_approx(result["fee"], vexp=0.0000141, vspan=0.0000001)
 
         self.log.info("Test fundrawtxn with invalid estimate_mode settings")
         for k, v in {"number": 42, "object": {"foo": "bar"}}.items():
@@ -1280,7 +1280,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         # Make sure the default wallet will not be loaded when restarted with a high minrelaytxfee
         self.nodes[0].unloadwallet(self.default_wallet_name, False)
         feerate = Decimal("0.1")
-        self.restart_node(0, [f"-minrelaytxfee={feerate}", "-discardfee=0"]) # Set high minrelayfee, set discardfee to 0 for easier calculation
+        self.restart_node(0, [f"-minrelaytxfee={feerate}", f"-maxtxfee=0.1", "-discardfee=0"]) # Set high minrelayfee and maxtxfee, set discardfee to 0 for easier calculation
 
         self.nodes[0].loadwallet(self.default_wallet_name, True)
         funds = self.nodes[0].get_wallet_rpc(self.default_wallet_name)
@@ -1310,7 +1310,7 @@ class RawTransactionsTest(BitcoinTestFramework):
             assert signed_tx["complete"]
             decoded_tx = tester.decoderawtransaction(signed_tx["hex"])
             assert_equal(len(decoded_tx["vin"]), 3)
-            assert tester.testmempoolaccept([signed_tx["hex"]])[0]["allowed"]
+            assert tester.testmempoolaccept(rawtxs=[signed_tx["hex"]], maxfeerate='0.1')[0]["allowed"]  # Must override default maxfeerate to pass
 
         # We want to choose more value than is available in 2 inputs when considering the fee,
         # but not enough to need 3 inputs when not considering the fee.
