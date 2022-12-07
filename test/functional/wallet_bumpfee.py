@@ -38,11 +38,12 @@ WALLET_PASSPHRASE = "test"
 WALLET_PASSPHRASE_TIMEOUT = 3600
 
 # Fee rates (sat/vB)
-INSUFFICIENT =      1
-ECONOMICAL   =     50
-NORMAL       =    100
-HIGH         =    500
-TOO_HIGH     = 100000
+# TODO: Make maxfeerate retrievable from rpc and set these rates accordingly.
+INSUFFICIENT =   1
+ECONOMICAL   =  50
+NORMAL       = 100
+HIGH         = 450  # stay below the maxfeerate (500)
+TOO_HIGH     = 10*HIGH
 
 
 class BumpFeeTest(BitcoinTestFramework):
@@ -110,6 +111,7 @@ class BumpFeeTest(BitcoinTestFramework):
         self.sync_mempools((rbf_node, peer_node))
         assert rbfid in rbf_node.getrawmempool() and rbfid in peer_node.getrawmempool()
 
+        # Test incorrect json key names
         for key in ["totalFee", "feeRate"]:
             assert_raises_rpc_error(-3, "Unexpected key {}".format(key), rbf_node.bumpfee, rbfid, {key: NORMAL})
 
@@ -117,7 +119,7 @@ class BumpFeeTest(BitcoinTestFramework):
         assert_raises_rpc_error(-8, "Insufficient total fee 0.00000141", rbf_node.bumpfee, rbfid, {"fee_rate": INSUFFICIENT})
 
         self.log.info("Test invalid fee rate settings")
-        assert_raises_rpc_error(-4, "Specified or calculated fee 0.141 is too high (cannot be higher than -maxtxfee 0.10",
+        assert_raises_rpc_error(-4, "is too high (cannot be higher than -maxtxfee",
             rbf_node.bumpfee, rbfid, {"fee_rate": TOO_HIGH})
         # Test fee_rate with zero values.
         msg = "Insufficient total fee 0.00"
@@ -239,7 +241,7 @@ def test_notmine_bumpfee(self, rbf_node, peer_node, dest_address):
     # here, the rbftx has a peer_node coin and then adds a rbf_node input
     # Note that this test depends upon the RPC code checking input ownership prior to change outputs
     # (since it can't use fundrawtransaction, it lacks a proper change output)
-    fee = Decimal("0.001")
+    fee = Decimal("0.00001")  # Must stay below maxtxfee
     utxos = [node.listunspent(query_options={'minimumAmount': fee})[-1] for node in (rbf_node, peer_node)]
     inputs = [{
         "txid": utxo["txid"],
@@ -459,12 +461,13 @@ def test_watchonly_psbt(self, peer_node, rbf_node, dest_address):
 
     funding_address1 = watcher.getnewaddress(address_type='bech32')
     funding_address2 = watcher.getnewaddress(address_type='bech32')
-    peer_node.sendmany("", {funding_address1: 0.001, funding_address2: 0.001})
+    funding_amount = Decimal("0.001")
+    peer_node.sendmany("", {funding_address1: funding_amount, funding_address2: funding_amount})
     self.generate(peer_node, 1)
 
     # Create single-input PSBT for transaction to be bumped
-    # Ensure the payment amount + change can be fully funded using one of the 0.001BTC inputs.
-    psbt = watcher.walletcreatefundedpsbt([watcher.listunspent()[0]], {dest_address: 0.0005}, 0,
+    # Ensure the payment amount can be fully funded using one of the 0.001BTC inputs but won't be enough for additional bump further below.
+    psbt = watcher.walletcreatefundedpsbt([watcher.listunspent()[0]], {dest_address: funding_amount - Decimal("0.00005000")}, 0,
             {"fee_rate": 1, "add_inputs": False}, True)['psbt']
     psbt_signed = signer.walletprocesspsbt(psbt=psbt, sign=True, sighashtype="ALL", bip32derivs=True)
     psbt_final = watcher.finalizepsbt(psbt_signed["psbt"])
