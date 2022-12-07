@@ -4,6 +4,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test wallet group functionality."""
 
+from decimal import Decimal
 from test_framework.blocktools import COINBASE_MATURITY
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.messages import (
@@ -160,21 +161,22 @@ class WalletGroupTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 1)
 
         self.log.info("Fill a wallet with 10,000 outputs corresponding to the same scriptPubKey")
+        output_amount = Decimal("0.05")
         for _ in range(5):
-            raw_tx = self.nodes[0].createrawtransaction([{"txid":"0"*64, "vout":0}], [{addr2[0]: 0.05}])
+            raw_tx = self.nodes[0].createrawtransaction([{"txid":"0"*64, "vout":0}], [{addr2[0]: output_amount}])
             tx = tx_from_hex(raw_tx)
             tx.vin = []
             tx.vout = [tx.vout[0]] * 2000
-            funded_tx = self.nodes[0].fundrawtransaction(tx.serialize().hex())
+            funded_tx = self.nodes[0].fundrawtransaction(hexstring=tx.serialize().hex(), options={"fee_rate": 5.0})  # Specify fee_rate so we get change instead of exceeding maxfeerate
             signed_tx = self.nodes[0].signrawtransactionwithwallet(funded_tx['hex'])
             self.nodes[0].sendrawtransaction(signed_tx['hex'])
             self.generate(self.nodes[0], 1)
 
-        # Check that we can create a transaction that only requires ~100 of our
+        # Check that we can create a transaction that only requires 100 of our
         # utxos, without pulling in all outputs and creating a transaction that
         # is way too big.
-        self.log.info("Test creating txn that only requires ~100 of our UTXOs without pulling in all outputs")
-        assert self.nodes[2].sendtoaddress(address=addr2[0], amount=5)
+        self.log.info("Test creating txn that only requires 100 of our UTXOs without pulling in all outputs")
+        assert self.nodes[2].sendtoaddress(address=addr2[0], amount=100*output_amount)
 
 
 if __name__ == '__main__':
