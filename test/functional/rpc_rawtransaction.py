@@ -269,33 +269,44 @@ class RawTransactionsTest(BitcoinTestFramework):
         self.log.info("Test sendrawtransaction/testmempoolaccept with maxfeerate")
         fee_exceeds_max = "Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate)"
 
-        # Test a transaction with a small fee.
-        # Fee rate is 0.00100000 BTC/kvB
-        tx = self.wallet.create_self_transfer(fee_rate=Decimal('0.00100000'))
-        # Thus, testmempoolaccept should reject
-        testres = self.nodes[2].testmempoolaccept([tx['hex']], 0.00001000)[0]
+        # Test a transaction above the maxfeerate default
+        # TODO: Make maxfeerate retrievable from rpc rather than hard-coding here.
+        max_fee_rate = Decimal("0.00500000")  # Current maxfeerate is 0.00500000 BTC/kvB
+        test_fee_rate = max_fee_rate + Decimal("0.00000001")
+        tx = self.wallet.create_self_transfer(fee_rate=test_fee_rate)
+        # We're above maxfeerate so testmempoolaccept should reject
+        testres = self.nodes[2].testmempoolaccept(rawtxs=[tx['hex']])[0]
         assert_equal(testres['allowed'], False)
-        assert_equal(testres['reject-reason'], 'max-fee-exceeded')
-        # and sendrawtransaction should throw
-        assert_raises_rpc_error(-25, fee_exceeds_max, self.nodes[2].sendrawtransaction, tx['hex'], 0.00001000)
-        # and the following calls should both succeed
+
+        # Test a transaction exactly at the maxfeerate default
+        test_fee_rate = max_fee_rate
+        tx = self.wallet.create_self_transfer(fee_rate=test_fee_rate)
+        # We're at maxfeerate so testmempoolaccept should accept
         testres = self.nodes[2].testmempoolaccept(rawtxs=[tx['hex']])[0]
         assert_equal(testres['allowed'], True)
-        self.nodes[2].sendrawtransaction(hexstring=tx['hex'])
 
-        # Test a transaction with a large fee.
-        # Fee rate is 0.20000000 BTC/kvB
-        tx = self.wallet.create_self_transfer(fee_rate=Decimal("0.20000000"))
-        # Thus, testmempoolaccept should reject
-        testres = self.nodes[2].testmempoolaccept([tx['hex']])[0]
-        assert_equal(testres['allowed'], False)
-        assert_equal(testres['reject-reason'], 'max-fee-exceeded')
-        # and sendrawtransaction should throw
-        assert_raises_rpc_error(-25, fee_exceeds_max, self.nodes[2].sendrawtransaction, tx['hex'])
-        # and the following calls should both succeed
-        testres = self.nodes[2].testmempoolaccept(rawtxs=[tx['hex']], maxfeerate='0.20000000')[0]
+        # Test a transaction below the maxfeerate default
+        test_fee_rate = max_fee_rate - Decimal("0.00000001")
+        tx = self.wallet.create_self_transfer(fee_rate=test_fee_rate)
+        # We're below maxfeerate so testmempoolaccept should accept
+        testres = self.nodes[2].testmempoolaccept(rawtxs=[tx['hex']])[0]
         assert_equal(testres['allowed'], True)
-        self.nodes[2].sendrawtransaction(hexstring=tx['hex'], maxfeerate='0.20000000')
+
+        # Test a transaction with maxfeerate manually decreased
+        test_max_fee_rate = test_fee_rate - Decimal("0.00000010")  # Must be at least a 10 sat diff to create a noticeable effect
+        # Our previous tx should now be rejected
+        testres = self.nodes[2].testmempoolaccept(rawtxs=[tx['hex']], maxfeerate=test_max_fee_rate)[0]
+        assert_equal(testres['allowed'], False)
+        # and sendrawtransaction should throw
+        assert_raises_rpc_error(-25, fee_exceeds_max, self.nodes[2].sendrawtransaction, tx['hex'], test_max_fee_rate)
+
+        # Test a transaction with maxfeerate manually increased
+        test_fee_rate = 2*max_fee_rate
+        tx = self.wallet.create_self_transfer(fee_rate=test_fee_rate)
+        # high-fee tx should now be accepted
+        testres = self.nodes[2].testmempoolaccept(rawtxs=[tx['hex']], maxfeerate=test_fee_rate)[0]
+        assert_equal(testres['allowed'], True)
+        self.nodes[2].sendrawtransaction(hexstring=tx['hex'], maxfeerate=test_fee_rate)
 
         self.log.info("Test sendrawtransaction/testmempoolaccept with tx already in the chain")
         self.generate(self.nodes[2], 1)
@@ -369,11 +380,12 @@ class RawTransactionsTest(BitcoinTestFramework):
         bal = self.nodes[2].getbalance()
 
         # send 1.2 BTC to msig adr
-        txId = self.nodes[0].sendtoaddress(mSigObj, 1.2)
+        test_amount = Decimal('1.20000000')
+        txId = self.nodes[0].sendtoaddress(mSigObj, test_amount)
         self.sync_all()
         self.generate(self.nodes[0], 1)
         # node2 has both keys of the 2of2 ms addr, tx should affect the balance
-        assert_equal(self.nodes[2].getbalance(), bal + Decimal('1.20000000'))
+        assert_equal(self.nodes[2].getbalance(), bal + test_amount)
 
 
         # 2of3 test from different nodes
@@ -388,7 +400,8 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         mSigObj = self.nodes[2].addmultisigaddress(2, [addr1Obj['pubkey'], addr2Obj['pubkey'], addr3Obj['pubkey']])['address']
 
-        txId = self.nodes[0].sendtoaddress(mSigObj, 2.2)
+        test_amount = Decimal('2.20000000')
+        txId = self.nodes[0].sendtoaddress(mSigObj, test_amount)
         decTx = self.nodes[0].gettransaction(txId)
         rawTx = self.nodes[0].decoderawtransaction(decTx['hex'])
         self.sync_all()
@@ -400,11 +413,12 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         txDetails = self.nodes[0].gettransaction(txId, True)
         rawTx = self.nodes[0].decoderawtransaction(txDetails['hex'])
-        vout = next(o for o in rawTx['vout'] if o['value'] == Decimal('2.20000000'))
+        vout = next(o for o in rawTx['vout'] if o['value'] == test_amount)
 
         bal = self.nodes[0].getbalance()
-        inputs = [{"txid": txId, "vout": vout['n'], "scriptPubKey": vout['scriptPubKey']['hex'], "amount": vout['value']}]
-        outputs = {self.nodes[0].getnewaddress(): 2.19}
+        inputs = [{"txid": txId, "vout": vout['n'], "scriptPubKey": vout['scriptPubKey']['hex'], "amount": test_amount}]
+        output_amount = test_amount - Decimal("0.00000500")  # Keep the fee modest to stay under maxtxfee
+        outputs = {self.nodes[0].getnewaddress(): output_amount}
         rawTx = self.nodes[2].createrawtransaction(inputs, outputs)
         rawTxPartialSigned = self.nodes[1].signrawtransactionwithwallet(rawTx, inputs)
         assert_equal(rawTxPartialSigned['complete'], False)  # node1 only has one key, can't comp. sign the tx
@@ -415,7 +429,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         rawTx = self.nodes[0].decoderawtransaction(rawTxSigned['hex'])
         self.sync_all()
         self.generate(self.nodes[0], 1)
-        assert_equal(self.nodes[0].getbalance(), bal + Decimal('50.00000000') + Decimal('2.19000000'))  # block reward + tx
+        assert_equal(self.nodes[0].getbalance(), bal + Decimal('50.00000000') + output_amount)  # block reward + tx
 
         # 2of2 test for combining transactions
         bal = self.nodes[2].getbalance()
@@ -429,7 +443,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         mSigObj = self.nodes[2].addmultisigaddress(2, [addr1Obj['pubkey'], addr2Obj['pubkey']])['address']
         mSigObjValid = self.nodes[2].getaddressinfo(mSigObj)
 
-        txId = self.nodes[0].sendtoaddress(mSigObj, 2.2)
+        txId = self.nodes[0].sendtoaddress(mSigObj, test_amount)
         decTx = self.nodes[0].gettransaction(txId)
         rawTx2 = self.nodes[0].decoderawtransaction(decTx['hex'])
         self.sync_all()
@@ -439,11 +453,11 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         txDetails = self.nodes[0].gettransaction(txId, True)
         rawTx2 = self.nodes[0].decoderawtransaction(txDetails['hex'])
-        vout = next(o for o in rawTx2['vout'] if o['value'] == Decimal('2.20000000'))
+        vout = next(o for o in rawTx2['vout'] if o['value'] == test_amount)
 
         bal = self.nodes[0].getbalance()
         inputs = [{"txid": txId, "vout": vout['n'], "scriptPubKey": vout['scriptPubKey']['hex'], "redeemScript": mSigObjValid['hex'], "amount": vout['value']}]
-        outputs = {self.nodes[0].getnewaddress(): 2.19}
+        outputs = {self.nodes[0].getnewaddress(): output_amount}
         rawTx2 = self.nodes[2].createrawtransaction(inputs, outputs)
         rawTxPartialSigned1 = self.nodes[1].signrawtransactionwithwallet(rawTx2, inputs)
         self.log.debug(rawTxPartialSigned1)
@@ -458,7 +472,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         rawTx2 = self.nodes[0].decoderawtransaction(rawTxComb)
         self.sync_all()
         self.generate(self.nodes[0], 1)
-        assert_equal(self.nodes[0].getbalance(), bal + Decimal('50.00000000') + Decimal('2.19000000'))  # block reward + tx
+        assert_equal(self.nodes[0].getbalance(), bal + Decimal('50.00000000') + output_amount)  # block reward + tx
 
 
 if __name__ == '__main__':
