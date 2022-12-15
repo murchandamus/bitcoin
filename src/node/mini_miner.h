@@ -21,8 +21,8 @@ class MockMempoolEntry
 
 public:
     CAmount fee_with_ancestors;
-    int64_t vsize_individual;
-    int64_t vsize_with_ancestors;
+    int32_t vsize_individual;
+    int32_t vsize_with_ancestors;
     explicit MockMempoolEntry(CTxMemPool::txiter entry) :
         fee_individual{entry->GetModifiedFee()},
         tx{entry->GetTx()},
@@ -33,8 +33,8 @@ public:
 
     CAmount GetModifiedFee() const { return fee_individual; }
     CAmount GetModFeesWithAncestors() const { return fee_with_ancestors; }
-    int64_t GetTxSize() const { return vsize_individual; }
-    int64_t GetSizeWithAncestors() const { return vsize_with_ancestors; }
+    int32_t GetTxSize() const { return vsize_individual; }
+    int32_t GetSizeWithAncestors() const { return vsize_with_ancestors; }
     const CTransaction& GetTx() const { return tx; }
 };
 
@@ -75,7 +75,7 @@ class MiniMiner
 
     // Information on the current status of the block
     CAmount total_fees{0};
-    int64_t total_vsize{0};
+    int32_t total_vsize{0};
 
     /** Main data structure holding the entries, can be indexed by txid */
     std::map<uint256, MockMempoolEntry> entries_by_txid;
