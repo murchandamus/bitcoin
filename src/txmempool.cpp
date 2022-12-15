@@ -1225,14 +1225,14 @@ std::vector<CTxMemPool::txiter> CTxMemPool::CalculateCluster(const std::vector<u
         }
         // i = index of the next item in the list to be processed
         for (size_t i{0}, to_process_count{txids.size()}; i < to_process_count; ++i) {
-            Parents relatives{cluster[i]->GetMemPoolParents()};
+            CTxMemPoolEntry::Parents relatives{cluster[i]->GetMemPoolParents()};
             relatives.merge(cluster[i]->GetMemPoolChildren());
             for (const CTxMemPoolEntry& entry : relatives) {
                 const auto tx_iter = mapTx.iterator_to(entry);
                 if (!visited(tx_iter)) {
                     cluster.push_back(tx_iter);
                     // we still need to process this
-                    ++unprocessed_count;
+                    ++to_process_count;
                 }
             }
         }
