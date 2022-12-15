@@ -234,7 +234,7 @@ CAmount MiniMiner::CalculateTotalBumpFees(const CFeeRate& target_feerate)
         // Skip any ancestors that have a higher minerscore already
         if (in_block.find(txid) != in_block.end()) continue;
         auto iter = entries_by_txid.find(outpoint.hash);
-        assert(iter != entries_by_txid.end());
+        if (iter == entries_by_txid.end()) continue;
         to_process.insert(iter);
         ancestors.insert(iter);
     }

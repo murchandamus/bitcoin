@@ -63,7 +63,7 @@ class MiniMiner
 
     // After using the outpoints to figure out which transactions are to be replaced, we can just
     // work with txids (each outpoint from a single tx should have the same bumpfee independently).
-    // Cache which outpoint are needed for each tx so we don't have to look up all the outputs.
+    // Cache which outpoints are needed for each tx so we don't have to look up all the outputs.
     // Excludes to-be-replaced and unavailable transactions (set to 0).
     std::map<uint256, std::vector<COutPoint>> outpoints_needed_by_txid;
 
