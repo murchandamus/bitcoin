@@ -37,12 +37,12 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
             this->bump_fees.emplace(std::make_pair(outpoint, 0));
         } else {
             // This UTXO is unconfirmed, in the mempool, and available to spend.
-            auto it = outpoints_needed_by_txid.find(outpoint.hash);
-            if (it != outpoints_needed_by_txid.end()) {
+            auto it = requested_outpoints_by_txid.find(outpoint.hash);
+            if (it != requested_outpoints_by_txid.end()) {
                 it->second.push_back(outpoint);
             } else {
                 std::vector<COutPoint> outpoints_of_tx({outpoint});
-                outpoints_needed_by_txid.emplace(std::make_pair(outpoint.hash, outpoints_of_tx));
+                requested_outpoints_by_txid.emplace(std::make_pair(outpoint.hash, outpoints_of_tx));
                 // Instead of operating on the entire mempool, just run the mining algorithm on the
                 // cluster of relevant transactions, which we'll store in mapModifiedTx.
             }
@@ -50,8 +50,8 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
     }
     // Calculate the cluster and construct the entry map.
     std::vector<uint256> txids_needed;
-    std::transform(outpoints_needed_by_txid.cbegin(),
-                   outpoints_needed_by_txid.cend(),
+    std::transform(requested_outpoints_by_txid.cbegin(),
+                   requested_outpoints_by_txid.cend(),
                    std::back_inserter(txids_needed),
                    [](const auto& pair) { return pair.first; });
     const auto& cluster = mempool.CalculateCluster(txids_needed);
@@ -61,8 +61,8 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
             assert(success);
             entries.push_back(mapiter);
         } else {
-            auto outpoints_it = outpoints_needed_by_txid.find(txiter->GetTx().GetHash());
-            if (outpoints_it != outpoints_needed_by_txid.end()) {
+            auto outpoints_it = requested_outpoints_by_txid.find(txiter->GetTx().GetHash());
+            if (outpoints_it != requested_outpoints_by_txid.end()) {
                 for (const auto& outpoint : outpoints_it->second) {
                     this->bump_fees.emplace(std::make_pair(outpoint, 0));
                 }
@@ -193,17 +193,17 @@ std::map<COutPoint, CAmount> MiniMiner::CalculateBumpFees(const CFeeRate& target
     // ancestor package that exceeds the target feerate and don't need to be bumped.
     for (const auto& txid : in_block) {
         // Not all of the block transactions were necessarily requested.
-        auto it = outpoints_needed_by_txid.find(txid);
-        if (it != outpoints_needed_by_txid.end()) {
+        auto it = requested_outpoints_by_txid.find(txid);
+        if (it != requested_outpoints_by_txid.end()) {
             for (const auto& outpoint : it->second) {
                 bump_fees.emplace(std::make_pair(outpoint, 0));
             }
-            outpoints_needed_by_txid.erase(it);
+            requested_outpoints_by_txid.erase(it);
         }
     }
     // For each transaction that remains, the bumpfee is the cost to raise it and its ancestors
     // to the target feerate, target_feerate * ancestor_size - ancestor_fees
-    for (const auto& [txid, outpoints] : outpoints_needed_by_txid) {
+    for (const auto& [txid, outpoints] : requested_outpoints_by_txid) {
         auto it = entries_by_txid.find(txid);
         assert(it != entries_by_txid.end());
         if (it != entries_by_txid.end()) {

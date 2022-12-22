@@ -65,7 +65,7 @@ class MiniMiner
     // work with txids (each outpoint from a single tx should have the same bumpfee independently).
     // Cache which outpoints are needed for each tx so we don't have to look up all the outputs.
     // Excludes to-be-replaced and unavailable transactions (set to 0).
-    std::map<uint256, std::vector<COutPoint>> outpoints_needed_by_txid;
+    std::map<uint256, std::vector<COutPoint>> requested_outpoints_by_txid;
 
     // What we're trying to calculate.
     std::map<COutPoint, CAmount> bump_fees;
