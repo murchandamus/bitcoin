@@ -48,10 +48,9 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
     }
     // Calculate the cluster and construct the entry map.
     std::vector<uint256> txids_needed;
-    std::transform(requested_outpoints_by_txid.cbegin(),
-                   requested_outpoints_by_txid.cend(),
-                   std::back_inserter(txids_needed),
-                   [](const auto& pair) { return pair.first; });
+    for (const auto& [txid, outpoints]: requested_outpoints_by_txid) {
+        txids_needed.push_back(txid);
+    }
     const auto& cluster = mempool.CalculateCluster(txids_needed);
     for (const auto& txiter : cluster) {
         if (to_be_replaced.find(txiter->GetTx().GetHash()) == to_be_replaced.end()) {
