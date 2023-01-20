@@ -85,12 +85,7 @@ static feebumper::Result CheckFeeRate(const CWallet& wallet, const CWalletTx& wt
         reused_inputs.push_back(txin.prevout);
     }
 
-    std::map<COutPoint, CAmount> bump_fees = wallet.chain().CalculateBumpFees(reused_inputs, newFeerate);
-    CAmount total_bump_fees = 0;
-    for (auto& [_, bump_fee] : bump_fees) {
-        total_bump_fees += bump_fee;
-    }
-
+    CAmount total_bump_fees = wallet.chain().CalculateTotalBumpFees(reused_inputs, newFeerate);
     CAmount new_total_fee = newFeerate.GetFee(maxTxSize) + total_bump_fees;
 
     CFeeRate incrementalRelayFee = std::max(wallet.chain().relayIncrementalFee(), CFeeRate(WALLET_INCREMENTAL_RELAY_FEE));
