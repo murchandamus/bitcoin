@@ -1167,15 +1167,15 @@ std::vector<CTxMemPool::txiter> CTxMemPool::CalculateCluster(const std::vector<u
         for (const auto& it : cluster) {
             visited(it);
         }
-        // i = index of where the list of unprocessed starts
-        for (size_t i{0}, unprocessed_count{txids.size()}; i < unprocessed_count; ++i) {
+        // i = index of the next item in the list to be processed
+        for (size_t i{0}, to_process_count{txids.size()}; i < to_process_count; ++i) {
             const auto curr = cluster[i];
             for (const CTxMemPoolEntry& parent_entry : curr->GetMemPoolParentsConst()) {
                 const auto parent_it = mapTx.iterator_to(parent_entry);
                 if (!visited(parent_it)) {
                     cluster.push_back(parent_it);
                     // we still need to process this
-                    ++unprocessed_count;
+                    ++to_process_count;
                 }
             }
             for (const CTxMemPoolEntry& child_entry : curr->GetMemPoolChildrenConst()) {
@@ -1183,7 +1183,7 @@ std::vector<CTxMemPool::txiter> CTxMemPool::CalculateCluster(const std::vector<u
                 if (!visited(child_it)) {
                     cluster.push_back(child_it);
                     // we still need to process this
-                    ++unprocessed_count;
+                    ++to_process_count;
                 }
             }
         }
