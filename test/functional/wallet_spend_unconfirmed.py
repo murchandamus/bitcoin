@@ -107,7 +107,7 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         self.assert_beats_target(ancestor_aware_tx)
         resulting_ancestry_fee_rate = self.calc_set_fee_rate([parent_tx, ancestor_aware_tx])
         assert_greater_than_or_equal(resulting_ancestry_fee_rate, self.target_fee_rate)
-        assert_greater_than_or_equal(self.target_fee_rate*1.5, resulting_ancestry_fee_rate)
+        assert_greater_than_or_equal(self.target_fee_rate*1.1, resulting_ancestry_fee_rate)
 
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
@@ -412,6 +412,23 @@ class UnconfirmedInputTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 1)
         wallet.unloadwallet()
 
+    def test_confirmed_and_unconfirmed_parent(self):
+        self.log.info("Start test with one unconfirmed and one confirmed input")
+        wallet = self.setup_and_fund_wallet("confirmed_and_unconfirmed_wallet")
+        wallet.sendtoaddress(address=wallet.getnewaddress(), amount=1, fee_rate=self.target_fee_rate)
+        self.generate(self.nodes[0], 1) # Wallet has two confirmed UTXOs of ~1BTC each
+        wallet.sendtoaddress(address=wallet.getnewaddress(), amount=0.5, fee_rate=self.target_fee_rate)
+
+        # wallet has one confirmed UTXO of 1BTC and two unconfirmed UTXOs of ~0.5BTC each
+        ancestor_aware_txid = wallet.sendtoaddress(address=self.def_wallet.getnewaddress(), amount=1.4,
+        ancestor_aware_tx = wallet.gettransaction(txid=ancestor_aware_txid, verbose=True)
+        resulting_fee_rate = self.calc_fee_rate(ancestor_aware_tx)
+        assert_greater_than_or_equal(resulting_fee_rate, self.target_fee_rate)
+
+        self.generate(self.nodes[0], 1)
+        wallet.unloadwallet()
+
+
     def run_test(self):
         self.log.info("Starting UnconfirmedInputTest!")
         self.target_fee_rate = 30
@@ -459,6 +476,10 @@ class UnconfirmedInputTest(BitcoinTestFramework):
 
         # Actual test: Create sibling tx with high fee and check that new child only pays for itself
         self.test_sibling_tx_bumps_parent()
+
+        # Actual test: Spend a confirmed and an unconfirmed input at the same time
+        self.test_confirmed_and_unconfirmed_parent()
+
 
 if __name__ == '__main__':
     UnconfirmedInputTest().main()
