@@ -225,11 +225,12 @@ public:
     //  is 0. Likewise, if any of the transaction's ancestors are already bumped, they are not
     //  included in the transaction's bump fee.
     //
-    //  This includes fee-bumping in RBFs. If an outpoint conflicts with another transaction in the
-    //  mempool, it is assumed that the goal is to replace that transaction. As such, the
-    //  calculation will exclude the to-be-replaced transaction, but will include the fee-bumping
-    //  cost. If bump fees of descendants of the to-be-replaced transaction are requested, the value
-    //  will be 0. Fee-related RBF rules are not included as they are logically distinct.
+    //  Also supported is bump-fee calculation in the case of replacements. If an outpoint
+    //  conflicts with another transaction in the mempool, it is assumed that the goal is to rep
+    //  that transaction. As such, the calculation will exclude the to-be-replaced transaction,
+    //  will include the fee-bumping cost. If bump fees of descendants of the to-be-replaced
+    //  transaction are requested, the value will be 0. Fee-related RBF rules are not included a
+    //  they are logically distinct.
     //
     //  Any outpoints that are otherwise unavailable from the mempool (e.g. UTXOs from confirmed
     //  transactions or transactions not yet broadcast by the wallet) are given a bump fee of 0.
