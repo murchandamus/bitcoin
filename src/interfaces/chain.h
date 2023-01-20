@@ -215,8 +215,8 @@ public:
 
     //! For each outpoint, calculate the fee-bumping cost to spend this outpoint at the specified
     //  feerate, including bumping its ancestors. For example, if the target feerate is 10sat/vbyte
-    //  and this outpoint refers to a mempool transaction at 5sat/vbyte, the bump fee includes the
-    //  cost to bump the mempool transaction to 10sat/vbyte (i.e. 5 * mempooltx.vsize). If that
+    //  and this outpoint refers to a mempool transaction at 3sat/vbyte, the bump fee includes the
+    //  cost to bump the mempool transaction to 10sat/vbyte (i.e. 7 * mempooltx.vsize). If that
     //  transaction also has, say, an unconfirmed parent with a feerate of 1sat/vbyte, the bump fee
     //  includes the cost to bump the parent (i.e. 9 * parentmempooltx.vsize).
     //
