@@ -906,14 +906,8 @@ std::vector<CTxMemPool::txiter> CTxMemPool::GetIterVec(const std::vector<uint256
     ret.reserve(txids.size());
     for (const auto& txid : txids) {
         const auto it = GetIter(txid);
-        assert(it);
-        if (it) {
-            ret.push_back(*it);
-        } else {
-            // return empty vector to let the caller know this failed.
-            std::vector<txiter> empty_vector;
-            return empty_vector;
-        }
+        if (!it) return {};
+        ret.push_back(*it);
     }
     return ret;
 }
