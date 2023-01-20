@@ -61,8 +61,9 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
             auto outpoints_it = requested_outpoints_by_txid.find(txiter->GetTx().GetHash());
             if (outpoints_it != requested_outpoints_by_txid.end()) {
                 for (const auto& outpoint : outpoints_it->second) {
-                    this->bump_fees.emplace(outpoint, 0);
+                    bump_fees.emplace(outpoint, 0);
                 }
+                requested_outpoints_by_txid.erase(outpoints_it);
             }
         }
     }
@@ -91,7 +92,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
                 }
             }
         }
-        if (!remove) descendant_set_by_txid.emplace(txid, cached_descendants);
+        if (!remove) descendant_set_by_txid.emplace(txid, std::move(cached_descendants));
     }
     // Release the mempool lock; we now have all the information we need for a subset of the entries
     // we care about. We will solely operate on the MockMempoolEntry map from now on.
