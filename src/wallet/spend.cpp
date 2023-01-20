@@ -989,7 +989,7 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
         total_bump_fees += coin.ancestor_bump_fees;
         txNew.vin.push_back(CTxIn(coin.outpoint, CScript(), nSequence));
     }
-    total_bump_fees -= result->GetBumpFeeDiscount();
+    total_bump_fees -= result.GetBumpFeeDiscount();
     DiscourageFeeSniping(txNew, rng_fast, wallet.chain(), wallet.GetLastBlockHash(), wallet.GetLastBlockHeight());
 
     // Calculate the transaction fee
