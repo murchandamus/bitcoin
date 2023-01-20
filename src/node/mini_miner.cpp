@@ -137,7 +137,7 @@ void MiniMiner::BuildMockTemplate(const CFeeRate& target_feerate)
         const auto ancestor_package_size = (*best_iter)->second.GetSizeWithAncestors();
         const auto ancestor_package_fee = (*best_iter)->second.GetModFeesWithAncestors();
         // Stop here. Everything that didn't "make it into the block" has bumpfee.
-        if (best_iter == entries.end() || ancestor_package_fee < target_feerate.GetFee(ancestor_package_size)) {
+        if (ancestor_package_fee < target_feerate.GetFee(ancestor_package_size)) {
             break;
         }
 
