@@ -34,7 +34,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
             // This UTXO is either confirmed or not yet submitted to mempool.
             // In the former case, no bump fee is required.
             // In the latter case, we have no information, so just return 0.
-            this->bump_fees.emplace(std::make_pair(outpoint, 0));
+            bump_fees.emplace(outpoint, 0);
         } else {
             // This UTXO is unconfirmed, in the mempool, and available to spend.
             auto it = requested_outpoints_by_txid.find(outpoint.hash);
@@ -42,9 +42,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
                 it->second.push_back(outpoint);
             } else {
                 std::vector<COutPoint> outpoints_of_tx({outpoint});
-                requested_outpoints_by_txid.emplace(std::make_pair(outpoint.hash, outpoints_of_tx));
-                // Instead of operating on the entire mempool, just run the mining algorithm on the
-                // cluster of relevant transactions, which we'll store in mapModifiedTx.
+                requested_outpoints_by_txid.emplace(outpoint.hash, outpoints_of_tx);
             }
         }
     }
@@ -57,14 +55,14 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
     const auto& cluster = mempool.CalculateCluster(txids_needed);
     for (const auto& txiter : cluster) {
         if (to_be_replaced.find(txiter->GetTx().GetHash()) == to_be_replaced.end()) {
-            auto [mapiter, success] = entries_by_txid.emplace(std::make_pair(txiter->GetTx().GetHash(), MockMempoolEntry(txiter)));
+            auto [mapiter, success] = entries_by_txid.emplace(txiter->GetTx().GetHash(), MockMempoolEntry(txiter));
             assert(success);
             entries.push_back(mapiter);
         } else {
             auto outpoints_it = requested_outpoints_by_txid.find(txiter->GetTx().GetHash());
             if (outpoints_it != requested_outpoints_by_txid.end()) {
                 for (const auto& outpoint : outpoints_it->second) {
-                    this->bump_fees.emplace(std::make_pair(outpoint, 0));
+                    this->bump_fees.emplace(outpoint, 0);
                 }
             }
         }
@@ -94,7 +92,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
                 }
             }
         }
-        if (!remove) descendant_set_by_txid.emplace(std::make_pair(txid, cached_descendants));
+        if (!remove) descendant_set_by_txid.emplace(txid, cached_descendants);
     }
     // Release the mempool lock; we now have all the information we need for a subset of the entries
     // we care about. We will solely operate on the MockMempoolEntry map from now on.
@@ -196,7 +194,7 @@ std::map<COutPoint, CAmount> MiniMiner::CalculateBumpFees(const CFeeRate& target
         auto it = requested_outpoints_by_txid.find(txid);
         if (it != requested_outpoints_by_txid.end()) {
             for (const auto& outpoint : it->second) {
-                bump_fees.emplace(std::make_pair(outpoint, 0));
+                bump_fees.emplace(outpoint, 0);
             }
             requested_outpoints_by_txid.erase(it);
         }
@@ -212,11 +210,11 @@ std::map<COutPoint, CAmount> MiniMiner::CalculateBumpFees(const CFeeRate& target
                                    - it->second.GetModFeesWithAncestors()};
             assert(bump_fee >= 0);
             for (const auto& outpoint : outpoints) {
-                bump_fees.emplace(std::make_pair(outpoint, bump_fee));
+                bump_fees.emplace(outpoint, bump_fee);
             }
         }
     }
-    return this->bump_fees;
+    return bump_fees;
 }
 
 CAmount MiniMiner::CalculateTotalBumpFees(const CFeeRate& target_feerate)
