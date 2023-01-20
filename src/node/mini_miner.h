@@ -35,7 +35,7 @@ public:
     CAmount GetModFeesWithAncestors() const { return fee_with_ancestors; }
     int32_t GetTxSize() const { return vsize_individual; }
     int32_t GetSizeWithAncestors() const { return vsize_with_ancestors; }
-    const CTransaction& GetTx() const { return tx; }
+    const CTransaction& GetTx() const LIFETIMEBOUND { return tx; }
 };
 
 void UpdateForMinedAncestor(const MockMempoolEntry& ancestor, const MockMempoolEntry& descendant);
