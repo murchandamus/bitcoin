@@ -14,16 +14,18 @@
 namespace node {
 
 // Container for tracking updates to ancestor feerate as we include ancestors in the "block"
-class MockMempoolEntry
+class MiniMinerMempoolEntry
 {
     const CAmount fee_individual;
     const CTransaction& tx;
     const int32_t vsize_individual;
 
+// This class must be constructed while holding mempool.cs. After construction, the object's
+// methods can be called without holding that lock.
 public:
     CAmount fee_with_ancestors;
     int32_t vsize_with_ancestors;
-    explicit MockMempoolEntry(CTxMemPool::txiter entry) :
+    explicit MiniMinerMempoolEntry(CTxMemPool::txiter entry) :
         fee_individual{entry->GetModifiedFee()},
         tx{entry->GetTx()},
         vsize_individual(entry->GetTxSize()),
@@ -38,7 +40,7 @@ public:
     const CTransaction& GetTx() const LIFETIMEBOUND { return tx; }
 };
 
-void UpdateForMinedAncestor(const MockMempoolEntry& ancestor, const MockMempoolEntry& descendant);
+void UpdateForMinedAncestor(const MiniMinerMempoolEntry& ancestor, const MiniMinerMempoolEntry& descendant);
 
 // Comparator needed for std::set<MockEntryMap::iterator>
 struct IteratorComparator
@@ -77,7 +79,7 @@ class MiniMiner
     int32_t total_vsize{0};
 
     /** Main data structure holding the entries, can be indexed by txid */
-    std::map<uint256, MockMempoolEntry> entries_by_txid;
+    std::map<uint256, MiniMinerMempoolEntry> entries_by_txid;
     using MockEntryMap = decltype(entries_by_txid);
 
     /** Vector of entries, can be sorted by ancestor feerate. */

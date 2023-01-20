@@ -54,7 +54,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
     const auto& cluster = mempool.CalculateCluster(txids_needed);
     for (const auto& txiter : cluster) {
         if (to_be_replaced.find(txiter->GetTx().GetHash()) == to_be_replaced.end()) {
-            auto [mapiter, success] = entries_by_txid.emplace(txiter->GetTx().GetHash(), MockMempoolEntry(txiter));
+            auto [mapiter, success] = entries_by_txid.emplace(txiter->GetTx().GetHash(), MiniMinerMempoolEntry(txiter));
             assert(success);
             entries.push_back(mapiter);
         } else {
@@ -71,8 +71,8 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
     // Remove the to-be-replaced transactions and build the descendant_set_by_txid cache.
     for (const auto& txiter : cluster) {
         const auto& txid = txiter->GetTx().GetHash();
-        // Cache descendants for future use. Unlike the real mempool, a descendant MockMempoolEntry
-        // will not exist without its ancestor MockMempoolEntry, so these sets won't be invalidated.
+        // Cache descendants for future use. Unlike the real mempool, a descendant MiniMinerMempoolEntry
+        // will not exist without its ancestor MiniMinerMempoolEntry, so these sets won't be invalidated.
         std::vector<MockEntryMap::iterator> cached_descendants;
         cached_descendants.emplace_back(entries_by_txid.find(txid));
         // If a tx is to-be-replaced, remove any of its descendants so they can't fee-bump anything.
@@ -95,7 +95,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
         if (!remove) descendant_set_by_txid.emplace(txid, std::move(cached_descendants));
     }
     // Release the mempool lock; we now have all the information we need for a subset of the entries
-    // we care about. We will solely operate on the MockMempoolEntry map from now on.
+    // we care about. We will solely operate on the MiniMinerMempoolEntry map from now on.
     assert(entries.size() == entries_by_txid.size());
     assert(entries.size() == descendant_set_by_txid.size());
     assert(in_block.empty());
