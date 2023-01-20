@@ -901,6 +901,7 @@ CTxMemPool::setEntries CTxMemPool::GetIterSet(const std::set<uint256>& hashes) c
 
 std::vector<CTxMemPool::txiter> CTxMemPool::GetIterVec(const std::vector<uint256>& txids) const
 {
+    AssertLockHeld(cs);
     std::vector<txiter> ret;
     ret.reserve(txids.size());
     for (const auto& txid : txids) {
