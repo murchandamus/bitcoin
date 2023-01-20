@@ -16,18 +16,18 @@ namespace node {
 // Container for tracking updates to ancestor feerate as we include ancestors in the "block"
 class MockMempoolEntry
 {
-    CAmount fee_individual;
+    const CAmount fee_individual;
     const CTransaction& tx;
+    const int32_t vsize_individual;
 
 public:
     CAmount fee_with_ancestors;
-    int32_t vsize_individual;
     int32_t vsize_with_ancestors;
     explicit MockMempoolEntry(CTxMemPool::txiter entry) :
         fee_individual{entry->GetModifiedFee()},
         tx{entry->GetTx()},
-        fee_with_ancestors{entry->GetModFeesWithAncestors()},
         vsize_individual(entry->GetTxSize()),
+        fee_with_ancestors{entry->GetModFeesWithAncestors()},
         vsize_with_ancestors(entry->GetSizeWithAncestors())
     { }
 
