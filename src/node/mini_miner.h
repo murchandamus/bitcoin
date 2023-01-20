@@ -17,7 +17,7 @@ namespace node {
 class MiniMinerMempoolEntry
 {
     const CAmount fee_individual;
-    const CTransaction& tx;
+    const CTransaction tx;
     const int32_t vsize_individual;
 
 // This class must be constructed while holding mempool.cs. After construction, the object's
