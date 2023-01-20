@@ -339,9 +339,6 @@ CoinsResult AvailableCoins(const CWallet& wallet,
 
             outpoints.push_back(outpoint);
 
-
-            // Cache total amount as we go
-            result.total_amount += output.nValue;
             // Checks the sum amount of all UTXO's.
             if (params.min_sum_amount != MAX_MONEY) {
                 if (result.GetTotalAmount() >= params.min_sum_amount) {
