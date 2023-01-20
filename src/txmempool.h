@@ -592,7 +592,10 @@ public:
         const Limits& limits,
         bool fSearchForParents = true) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
-    /** Get entire list of connected transactions for all transactions in txids. */
+    /**
+     * Get entire list of connected transactions for all transactions in txids.
+     * @pre All txs must be in the mempool, else an empty vector is returned
+     */
     std::vector<txiter> CalculateCluster(const std::vector<uint256>& txids) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /** Calculate all in-mempool ancestors of a set of transactions not already in the mempool and
