@@ -222,8 +222,8 @@ public:
     //
     //  If the outpoint comes from an unconfirmed transaction that is already above the target
     //  feerate or bumped by its descendant(s) already, it does not need to be bumped. Its bump fee
-    //  is 0. Likewise, if any of the transaction's ancestors are already bumped, they are not
-    //  included in the transaction's bump fee.
+    //  is 0. Likewise, if any of the transaction's ancestors are already bumped by a transaction
+    //  in our mempool, they are not included in the transaction's bump fee.
     //
     //  Also supported is bump-fee calculation in the case of replacements. If an outpoint
     //  conflicts with another transaction in the mempool, it is assumed that the goal is to rep
@@ -243,7 +243,7 @@ public:
     virtual std::map<COutPoint, CAmount> CalculateBumpFees(const std::vector<COutPoint>& outpoints, const CFeeRate& target_feerate) = 0;
 
     //! Calculate the shared bump fees for a given set of outpoints per the
-    //  same strategy as in CalculateBumpFees(…).  Other than the above call,
+    //  same strategy as in CalculateBumpFees(…).  Unlike the above call,
     //  this does not return individual bump fees per outpoint, but a single bump
     //  fee for the shared ancestry.  This call may be used to correct
     //  overestimation due to shared ancestry by multiple UTXOs after coin
