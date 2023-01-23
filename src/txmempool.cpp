@@ -1158,18 +1158,26 @@ std::vector<CTxMemPool::txiter> CTxMemPool::CalculateCluster(const std::vector<u
 {
     AssertLockHeld(cs);
     std::vector<txiter> cluster{GetIterVec(txids)};
-    assert(cluster.size() == txids.size());
+    if (cluster.size() != txids.size()) {
+        // We can't continue because the caller specified a tx that doesn't exist in the mempool.
+        // Return an empty vector to let them know this failed.
+        return {};
+    }
+    // Reserve total ancestor + descendant counts of each transaction.  This is an approximation; it
+    // may overestimate because transactions may share ancestors/descendants, and may underestimate
+    // because the cluster may include more than just ancestors and descendants.
     cluster.reserve(std::accumulate(cluster.cbegin(), cluster.cend(), 0, [](size_t sum, const auto it) {
-        return sum + it->GetCountWithAncestors() + it->GetCountWithDescendants(); }));
+        return sum + it->GetCountWithAncestors() + it->GetCountWithDescendants() - 1; }));
     {
-        // Use epoch: visiting an entry means we have added it to the cluster vector.
+        // Use epoch: visiting an entry means we have added it to the cluster vector. It does not
+        // necessarily mean the entry has been processed.
         WITH_FRESH_EPOCH(m_epoch);
         for (const auto& it : cluster) {
             visited(it);
         }
         // i = index of the next item in the list to be processed
         for (size_t i{0}, to_process_count{txids.size()}; i < to_process_count; ++i) {
-            CTxMemPoolEntry::Parents relatives{cluster[i]->GetMemPoolParents()};
+            CTxMemPoolEntry::Parents relatives{cluster.at(i)->GetMemPoolParents()};
             relatives.merge(cluster[i]->GetMemPoolChildren());
             for (const CTxMemPoolEntry& entry : relatives) {
                 const auto tx_iter = mapTx.iterator_to(entry);
