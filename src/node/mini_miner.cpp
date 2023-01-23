@@ -188,7 +188,7 @@ std::map<COutPoint, CAmount> MiniMiner::CalculateBumpFees(const CFeeRate& target
     assert(in_block.empty() || CFeeRate(total_fees, total_vsize) >= target_feerate);
 
     // Each transaction that "made it into the block" has a bumpfee of 0, i.e. they are part of an
-    // ancestor package that exceeds the target feerate and don't need to be bumped.
+    // ancestor package with at least the target feerate and don't need to be bumped.
     for (const auto& txid : in_block) {
         // Not all of the block transactions were necessarily requested.
         auto it = requested_outpoints_by_txid.find(txid);
