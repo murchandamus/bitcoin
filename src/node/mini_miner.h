@@ -57,36 +57,36 @@ struct IteratorComparator
 class MiniMiner
 {
     // Original outpoints requested
-    std::vector<COutPoint> requested_outpoints;
+    std::vector<COutPoint> m_requested_outpoints;
 
     // Set once per lifetime, fill in during initialization.
     // txids of to-be-replaced transactions
-    std::set<uint256> to_be_replaced;
+    std::set<uint256> m_to_be_replaced;
 
     // If multiple argument outpoints correspond to the same transaction, cache them together in
     // a single entry indexed by txid. Then we can just work with txids since all outpoints from
     // the same tx will have the same bumpfee. Excludes non-mempool transactions.
-    std::map<uint256, std::vector<COutPoint>> requested_outpoints_by_txid;
+    std::map<uint256, std::vector<COutPoint>> m_requested_outpoints_by_txid;
 
     // What we're trying to calculate.
-    std::map<COutPoint, CAmount> bump_fees;
+    std::map<COutPoint, CAmount> m_bump_fees;
 
     // The constructed block template
-    std::set<uint256> in_block;
+    std::set<uint256> m_in_block;
 
     // Information on the current status of the block
-    CAmount total_fees{0};
-    int32_t total_vsize{0};
+    CAmount m_total_fees{0};
+    int32_t m_total_vsize{0};
 
     /** Main data structure holding the entries, can be indexed by txid */
-    std::map<uint256, MiniMinerMempoolEntry> entries_by_txid;
-    using MockEntryMap = decltype(entries_by_txid);
+    std::map<uint256, MiniMinerMempoolEntry> m_entries_by_txid;
+    using MockEntryMap = decltype(m_entries_by_txid);
 
     /** Vector of entries, can be sorted by ancestor feerate. */
-    std::vector<MockEntryMap::iterator> entries;
+    std::vector<MockEntryMap::iterator> m_entries;
 
     /** Map of txid to its descendants. Should be inclusive. */
-    std::map<uint256, std::vector<MockEntryMap::iterator>> descendant_set_by_txid;
+    std::map<uint256, std::vector<MockEntryMap::iterator>> m_descendant_set_by_txid;
 
     /** Consider this ancestor package "mined" so remove all these entries from our data structures. */
     void DeleteAncestorPackage(const std::set<MockEntryMap::iterator, IteratorComparator>& ancestors);
