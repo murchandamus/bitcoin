@@ -188,6 +188,168 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
     return result;
 }
 
+/*
+ * Coin Grinder is a DFS-based algorithm that deterministically searches for the minimum-weight input set to fund the
+ * transaction. The algorithm is similar to the Branch and Bound algorithm, but will produce a transaction _with_ a
+ * change output instead of a changeless transaction.
+ *
+ * @param std::vector<OutputGroup>& utxo_pool The UTXOs that we are choosing from. These UTXOs will be sorted in
+ *        descending order by effective value, with lower waste preferred as a tie-breaker. (We can think of an output
+ *        group with multiple as a heavier UTXO with the combined amount here.)
+ * @param const CAmount& selection_target This is the minimum amount that we need for the transaction without considering change.
+ * @param const CAmount& change_target The minimum budget for creating a change output, by which we increase the selection_target.
+ * @param int max_weight The maximum permitted weight for the input set.
+ * @returns The result of this coin selection algorithm, or std::nullopt
+ */
+util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
+{
+    std::sort(utxo_pool.begin(), utxo_pool.end(), descending);
+
+    // Check that there are sufficient funds
+    CAmount total_available = 0;
+    for (const OutputGroup& utxo : utxo_pool) {
+        // Assert UTXOs with negative effective value have been filtered
+        assert(utxo.GetSelectionAmount() > 0);
+        total_available += utxo.GetSelectionAmount();
+    }
+    if (total_available < selection_target + change_target) {
+        // Insufficient funds
+        return util::Error();
+    }
+
+    // CoinGrinder tracks selection via the indices of the currently selected UTXOs
+    std::vector<size_t> best_selection;
+    CAmount best_selection_amount = MAX_MONEY;
+    int best_selection_weight = std::numeric_limits<int>::max();
+    bool max_tx_weight_exceeded = false;
+
+    std::vector<size_t> curr_selection;
+    CAmount curr_amount = 0;
+    int curr_weight = 0;
+    size_t next_utxo = 0; // Index of the next UTXO to consider
+
+    /*
+     * You can think of the current selection as a vector of booleans that has decided inclusion or exclusion of all
+     * UTXOs before `next_utxo`. When we consider the next UTXO, we extend this hypothetical boolean vector either with
+     * a true value if the UTXO is included or a false value if it is omitted. The equivalent state is stored more
+     * compactly as the list of indices of the included UTXOs and the `next_utxo` index.
+     *
+     * We can never find a new solution by deselecting a UTXO, because we then revisit a previously evaluated
+     * selection. Therefore, we only need to check whether we found a new solution _after adding_ a new UTXO.
+     *
+     * Each iteration of CoinGrinder starts by selecting the `next_utxo` and evaluating the current selection. We
+     * use three state transactions to progress from the current selection to the next promising selection:
+     *
+     * - EXPLORE inclusion branch: We do not have sufficient funds, yet. Add `next_utxo` to the current selection, then
+     *                             nominate the direct successor of the just selected UTXO as our `next_utxo` for the
+     *                             following iteration.
+     *
+     *                             Example:
+     *                                 Current Selection: {0, 5, 7}
+     *                                 Evaluation: EXPLORE, next_utxo: 8
+     *                                 Next Selection: {0, 5, 7, 8}
+     *
+     * - SHIFT to omission branch: Adding more UTXOs to the current selection cannot produce a solution that is better
+     *                             than the current best, e.g. the max weight is exceeded or the current selection has
+     *                             exceeded reached the target.
+     *                             We designate our `next_utxo` the one after the tail of our current selection, then
+     *                             deselected the tail of our current selection.
+     *
+     *                             Example:
+     *                                 Current Selection: {0, 5, 7}
+     *                                 Evaluation: SHIFT, next_utxo: 8, omit last selected: {0, 5}
+     *                                 Next Selection: {0, 5, 8}
+     *
+     * - CUT entire subtree:       We have exhausted the inclusion branch for the penultimately selected UTXO, both the
+     *                             inclusion and the omission branch of the current prefix are barren. E.g. we have
+     *                             reached the end of the UTXO pool, so neither further EXPLORING nor SHIFTING can find
+     *                             any solutions. We designate our `next_utxo` the one after our penultimate selected,
+     *                             then deselect both the last and penultimate selected.
+     *
+     *                             Example:
+     *                                 Current Selection: {0, 5, 7}
+     *                                 Evaluation: CUT, next_utxo: 6, omit two last selected: {0}
+     *                                 Next Selection: {0, 6}
+     */
+    auto deselect_last = [&]() {
+        OutputGroup& utxo = utxo_pool[curr_selection.back()];
+        curr_amount -= utxo.GetSelectionAmount();
+        curr_weight -= utxo.m_weight;
+        curr_selection.pop_back();
+    };
+
+    SelectionResult result(selection_target, SelectionAlgorithm::CG);
+    size_t curr_try = 0;
+    while (true) {
+        bool should_shift{false}, should_cut{false};
+        // Select `next_utxo`
+        OutputGroup& utxo = utxo_pool[next_utxo];
+        curr_amount += utxo.GetSelectionAmount();
+        curr_weight += utxo.m_weight;
+        curr_selection.push_back(next_utxo);
+        ++next_utxo;
+        ++curr_try;
+
+        // EVALUATE current selection: check for solutions and see whether we can CUT or SHIFT before EXPLORING further
+        if (curr_weight > max_weight) {
+            // max_weight exceeded: SHIFT
+            max_tx_weight_exceeded = true;
+            should_shift  = true;
+        } else if (curr_amount >= selection_target + change_target) {
+            // Success, adding more weight cannot be better: SHIFT
+            should_shift  = true;
+            if (curr_weight < best_selection_weight || (curr_weight == best_selection_weight && curr_amount < best_selection_amount)) {
+                // New lowest weight, or same weight with fewer funds tied up
+                best_selection = curr_selection;
+                best_selection_weight = curr_weight;
+                best_selection_amount = curr_amount;
+            }
+        }
+
+        if (curr_try >= TOTAL_TRIES) {
+            // Solution is not guaranteed to be optimal if `curr_try` hit TOTAL_TRIES
+            result.SetSelectionsEvaluated(curr_try);
+            break;
+        }
+
+        if (next_utxo == utxo_pool.size()) {
+            // Last added UTXO was end of UTXO pool, nothing left to add on inclusion or omission branch: CUT
+            should_cut = true;
+        }
+
+        if (should_cut) {
+            // Neither adding to the current selection nor exploring the omission branch of the last selected UTXO can
+            // find any solutions. Redirect to exploring Omission branch of the penultimate selected UTXO (i.e. deselect
+            // last selected UTXO, then SHIFT)
+            should_cut = false;
+            deselect_last();
+            should_shift  = true;
+        }
+
+        if (should_shift) {
+            // Set `next_utxo` to one after last selected, then deselect last selected UTXO
+            if (curr_selection.empty()) {
+                // Exhausted search space before running into attempt limit
+                result.SetSelectionsEvaluated(curr_try);
+                break;
+            }
+            next_utxo = curr_selection.back() + 1;
+            deselect_last();
+            should_shift  = false;
+        }
+    }
+
+    if (best_selection.empty()) {
+        return max_tx_weight_exceeded ? ErrorMaxWeightExceeded() : util::Error();
+    }
+
+    for (const size_t& i : best_selection) {
+        result.AddInput(utxo_pool[i]);
+    }
+
+    return result;
+}
+
 class MinOutputGroupComparator
 {
 public:
@@ -514,6 +676,15 @@ void SelectionResult::ComputeAndSetWaste(const CAmount min_viable_change, const 
     }
 }
 
+void SelectionResult::SetSelectionsEvaluated(size_t attempts) {
+    m_selections_evaluated = attempts;
+}
+
+size_t SelectionResult::GetSelectionsEvaluated() const
+{
+    return m_selections_evaluated;
+}
+
 CAmount SelectionResult::GetWaste() const
 {
     return *Assert(m_waste);
@@ -607,6 +778,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::BNB: return "bnb";
     case SelectionAlgorithm::KNAPSACK: return "knapsack";
     case SelectionAlgorithm::SRD: return "srd";
+    case SelectionAlgorithm::CG: return "cg";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
     }
