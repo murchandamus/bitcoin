@@ -29,6 +29,10 @@ static util::Result<SelectionResult> ErrorMaxWeightExceeded()
 struct {
     bool operator()(const OutputGroup& a, const OutputGroup& b) const
     {
+        if (a.GetSelectionAmount() == b.GetSelectionAmount()) {
+            // Lower waste is better when effective_values are tied
+            return (a.fee - a.long_term_fee) < (b.fee - b.long_term_fee);
+        }
         return a.GetSelectionAmount() > b.GetSelectionAmount();
     }
 } descending;
