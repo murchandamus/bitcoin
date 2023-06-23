@@ -477,6 +477,22 @@ CAmount GetSelectionWaste(const std::set<std::shared_ptr<COutput>>& inputs, CAmo
     return waste;
 }
 
+CAmount GetSelectionPrivacyScore(const std::set<std::shared_ptr<COutput>>& inputs, CAmount change_cost, CAmount target, bool use_effective_value) {
+    int privacy_points = 0; // no privacy benefits or privacy issues
+
+    int prev_input_bytes = inputs.at(0)->input_bytes;
+    for (const auto& coin_ptr : inputs) {
+        const COutput& coin = *coin_ptr;
+        if (coin.input_bytes != prev_input_bytes) {
+            privacy_points += 3; // Mixed inputs triple baaad
+            break;
+        }
+        prev_input_bytes = coin.input_bytes;
+    }
+
+    return CAmount{privacy_points*30};
+}
+
 CAmount GenerateChangeTarget(const CAmount payment_value, const CAmount change_fee, FastRandomContext& rng)
 {
     if (payment_value <= CHANGE_LOWER / 2) {

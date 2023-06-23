@@ -294,6 +294,22 @@ typedef std::map<CoinEligibilityFilter, OutputGroupTypeMap> FilteredOutputGroups
  */
 [[nodiscard]] CAmount GetSelectionWaste(const std::set<std::shared_ptr<COutput>>& inputs, CAmount change_cost, CAmount target, bool use_effective_value = true);
 
+/** Compute the privacy score for this SelectionResult.
+ * Since we want the privacy score to modify the waste score, we translate the
+ * privacy score into a cost in sats. We will start with one ‘privacy_point’ being
+ * worth 30 sats, which is about one hundredth of the current moscowtime.
+ *
+ * Note this function is separate from SelectionResult for the tests.
+ *
+ * @param[in] inputs The selected inputs
+ * @param[in] change_cost The cost of creating change and spending it in the future.
+ *                        Only used if there is change, in which case it must be positive.
+ *                        Must be 0 if there is no change.
+ * @param[in] target The amount targeted by the coin selection algorithm.
+ * @param[in] use_effective_value Whether to use the input's effective value (when true) or the real value (when false).
+ * @return The privacy score
+ */
+[[nodiscard]] CAmount GetSelectionPrivacyScore(const std::set<std::shared_ptr<COutput>>& inputs, CAmount change_cost, CAmount target, bool use_effective_value = true);
 
 /** Choose a random change target for each transaction to make it harder to fingerprint the Core
  * wallet based on the change output values of transactions it creates.
@@ -334,6 +350,8 @@ private:
     bool m_use_effective{false};
     /** The computed waste */
     std::optional<CAmount> m_waste;
+    /** The computed privacy score */
+    std::optional<CAmount> m_privacy_score;
     /** Total weight of the selected inputs */
     int m_weight{0};
 
@@ -367,6 +385,10 @@ public:
     /** Calculates and stores the waste for this selection via GetSelectionWaste */
     void ComputeAndSetWaste(const CAmount min_viable_change, const CAmount change_cost, const CAmount change_fee);
     [[nodiscard]] CAmount GetWaste() const;
+
+    /** Calculates and stores the privacy score for this selection */
+    void ComputeAndSetPrivacyScore(const CAmount min_viable_change, const CAmount change_cost, const CAmount change_fee);
+    [[nodiscard]] CAmount GetPrivacyScore() const;
 
     /**
      * Combines the @param[in] other selection result into 'this' selection result.
