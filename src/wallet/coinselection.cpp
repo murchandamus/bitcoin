@@ -457,14 +457,12 @@ CAmount SelectionResult::GetSelectionWaste(CAmount change_cost, CAmount target, 
 
     // Always consider the cost of spending an input now vs in the future.
     CAmount waste = 0;
-    CAmount selected_effective_value = 0;
     for (const auto& coin_ptr : m_selected_inputs) {
         const COutput& coin = *coin_ptr;
         waste += coin.GetFee() - coin.long_term_fee;
     }
     // Bump fee of whole selection may diverge from sum of individual bump fees
-    waste += GetTotalBumpFees();
-    selected_effective_value += use_effective_value ? GetSelectedEffectiveValue() : GetSelectedValue();
+    waste -= bump_fee_group_discount;
 
     if (change_cost) {
         // Consider the cost of making change and spending it in the future
@@ -473,6 +471,7 @@ CAmount SelectionResult::GetSelectionWaste(CAmount change_cost, CAmount target, 
         waste += change_cost;
     } else {
         // When we are not making change (change_cost == 0), consider the excess we are throwing away to fees
+        CAmount selected_effective_value = use_effective_value ? GetSelectedEffectiveValue() : GetSelectedValue();
         assert(selected_effective_value >= target);
         waste += selected_effective_value - target;
     }
