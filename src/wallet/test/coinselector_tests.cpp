@@ -837,7 +837,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
     const CAmount excess{in_amt - fee * 2 - target};
 
     // The following tests that the waste is calculated correction in various scenarios
-    // ComputeAndSetWaste will first determine the size of the change output. We don't really
+    // RecalculateWaste will first determine the size of the change output. We don't really
     // care about the change and just want to use the variant that always includes the change_cost,
     // so min_viable_change and change_fee are set to 0 to ensure that.
     {
@@ -845,14 +845,14 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection1{target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection1, fee, fee - fee_diff);
         add_coin(2 * COIN, 2, selection1, fee, fee - fee_diff);
-        selection1.ComputeAndSetWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
+        selection1.RecalculateWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(fee_diff * 2 + change_cost, selection1.GetWaste());
 
         // Waste will be greater when fee is greater, but long term fee is the same
         SelectionResult selection2{target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection2, fee * 2, fee - fee_diff);
         add_coin(2 * COIN, 2, selection2, fee * 2, fee - fee_diff);
-        selection2.ComputeAndSetWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
+        selection2.RecalculateWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
         BOOST_CHECK_GT(selection2.GetWaste(), selection1.GetWaste());
 
         // Waste with change is the change cost and difference between fee and long term fee
@@ -860,7 +860,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection3{target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection3, fee, fee + fee_diff);
         add_coin(2 * COIN, 2, selection3, fee, fee + fee_diff);
-        selection3.ComputeAndSetWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
+        selection3.RecalculateWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(fee_diff * -2 + change_cost, selection3.GetWaste());
         BOOST_CHECK_LT(selection3.GetWaste(), selection1.GetWaste());
     }
@@ -870,7 +870,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection_nochange1{target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection_nochange1, fee, fee - fee_diff);
         add_coin(2 * COIN, 2, selection_nochange1, fee, fee - fee_diff);
-        selection_nochange1.ComputeAndSetWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
+        selection_nochange1.RecalculateWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(fee_diff * 2 + excess, selection_nochange1.GetWaste());
 
         // Waste without change is the excess and difference between fee and long term fee
@@ -878,7 +878,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection_nochange2{target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection_nochange2, fee, fee + fee_diff);
         add_coin(2 * COIN, 2, selection_nochange2, fee, fee + fee_diff);
-        selection_nochange2.ComputeAndSetWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
+        selection_nochange2.RecalculateWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(fee_diff * -2 + excess, selection_nochange2.GetWaste());
         BOOST_CHECK_LT(selection_nochange2.GetWaste(), selection_nochange1.GetWaste());
     }
@@ -888,7 +888,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection{target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection, fee, fee);
         add_coin(2 * COIN, 2, selection, fee, fee);
-        selection.ComputeAndSetWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
+        selection.RecalculateWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(change_cost, selection.GetWaste());
     }
 
@@ -897,7 +897,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection{target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection, fee, fee);
         add_coin(2 * COIN, 2, selection, fee, fee);
-        selection.ComputeAndSetWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
+        selection.RecalculateWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(excess, selection.GetWaste());
     }
 
@@ -907,7 +907,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection{exact_target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection, fee, fee);
         add_coin(2 * COIN, 2, selection, fee, fee);
-        selection.ComputeAndSetWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
+        selection.RecalculateWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(0, selection.GetWaste());
     }
 
@@ -917,7 +917,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         const CAmount new_change_cost{fee_diff * 2};
         add_coin(1 * COIN, 1, selection, fee, fee + fee_diff);
         add_coin(2 * COIN, 2, selection, fee, fee + fee_diff);
-        selection.ComputeAndSetWaste(/*min_viable_change=*/0, new_change_cost, /*change_fee=*/0);
+        selection.RecalculateWaste(/*min_viable_change=*/0, new_change_cost, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(0, selection.GetWaste());
     }
 
@@ -927,7 +927,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         SelectionResult selection{new_target, SelectionAlgorithm::MANUAL};
         add_coin(1 * COIN, 1, selection, fee, fee + fee_diff);
         add_coin(2 * COIN, 2, selection, fee, fee + fee_diff);
-        selection.ComputeAndSetWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
+        selection.RecalculateWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(0, selection.GetWaste());
     }
 
@@ -938,7 +938,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         const CAmount target_waste1{-2 * fee_diff}; // = (2 * fee) - (2 * (fee + fee_diff))
         add_coin(1 * COIN, 1, selection, fee, fee + fee_diff);
         add_coin(2 * COIN, 2, selection, fee, fee + fee_diff);
-        selection.ComputeAndSetWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
+        selection.RecalculateWaste(/*min_viable_change=*/0, /*change_cost=*/0, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(target_waste1, selection.GetWaste());
     }
 
@@ -949,7 +949,7 @@ BOOST_AUTO_TEST_CASE(waste_test)
         const CAmount target_waste2{-2 * large_fee_diff + change_cost}; // = (2 * fee) - (2 * (fee + large_fee_diff)) + change_cost
         add_coin(1 * COIN, 1, selection, fee, fee + large_fee_diff);
         add_coin(2 * COIN, 2, selection, fee, fee + large_fee_diff);
-        selection.ComputeAndSetWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
+        selection.RecalculateWaste(/*min_viable_change=*/0, change_cost, /*change_fee=*/0);
         BOOST_CHECK_EQUAL(target_waste2, selection.GetWaste());
     }
 }
