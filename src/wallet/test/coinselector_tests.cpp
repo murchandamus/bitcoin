@@ -1226,7 +1226,7 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
         });
         BOOST_CHECK(res);
         // If this takes more attempts, the implementation has regressed
-        size_t expected_attempts = 2041;
+        size_t expected_attempts = 525;
         BOOST_CHECK_MESSAGE(res->GetSelectionsEvaluated() == expected_attempts, strprintf("Expected %i attempts, but got %i", expected_attempts, res->GetSelectionsEvaluated()));
     }
 
