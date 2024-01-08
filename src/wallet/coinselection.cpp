@@ -284,8 +284,9 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
     };
 
     SelectionResult result(selection_target, SelectionAlgorithm::CG);
+    bool is_done = false;
     size_t curr_try = 0;
-    while (true) {
+    while (!is_done) {
         bool should_shift{false}, should_cut{false};
         // Select `next_utxo`
         OutputGroup& utxo = utxo_pool[next_utxo];
@@ -338,10 +339,11 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
             should_shift  = true;
         }
 
-        if (should_shift) {
+        while (!is_done && should_shift) {
             // Set `next_utxo` to one after last selected, then deselect last selected UTXO
             if (curr_selection.empty()) {
                 // Exhausted search space before running into attempt limit
+                is_done = true;
                 result.SetSelectionsEvaluated(curr_try);
                 result.SetAlgoCompleted(true);
                 break;
@@ -349,6 +351,21 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
             next_utxo = curr_selection.back() + 1;
             deselect_last();
             should_shift  = false;
+
+            // After SHIFTing to an omission branch, the `next_utxo` might have the same value and same weight as the
+            // UTXO we just omitted (i.e. it is a "clone"). If so, selecting `next_utxo` would produce an equivalent
+            // selection as one we previously evaluated. In that case, increment `next_utxo` until we find a UTXO with a
+            // differing amount or weight.
+            while (utxo_pool[next_utxo - 1].GetSelectionAmount() == utxo_pool[next_utxo].GetSelectionAmount()
+                    && utxo_pool[next_utxo - 1].fee == utxo_pool[next_utxo].fee) {
+                if (next_utxo >= utxo_pool.size() - 1) {
+                    // Reached end of UTXO pool skipping clones: SHIFT instead
+                    should_shift = true;
+                    break;
+                }
+                // Skip clone: previous UTXO is equivalent and unselected
+                ++next_utxo;
+            }
         }
     }
 
