@@ -309,6 +309,7 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
         if (curr_try >= TOTAL_TRIES) {
             // Solution is not guaranteed to be optimal if `curr_try` hit TOTAL_TRIES
             result.SetSelectionsEvaluated(curr_try);
+            result.SetAlgoCompleted(false);
             break;
         }
 
@@ -331,6 +332,7 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
             if (curr_selection.empty()) {
                 // Exhausted search space before running into attempt limit
                 result.SetSelectionsEvaluated(curr_try);
+                result.SetAlgoCompleted(true);
                 break;
             }
             next_utxo = curr_selection.back() + 1;
@@ -674,6 +676,15 @@ void SelectionResult::ComputeAndSetWaste(const CAmount min_viable_change, const 
     } else {
         m_waste = GetSelectionWaste(0, m_target, m_use_effective);
     }
+}
+
+void SelectionResult::SetAlgoCompleted(bool algo_completed) {
+    m_algo_completed = algo_completed;
+}
+
+bool SelectionResult::GetAlgoCompleted() const
+{
+    return m_algo_completed;
 }
 
 void SelectionResult::SetSelectionsEvaluated(size_t attempts) {
