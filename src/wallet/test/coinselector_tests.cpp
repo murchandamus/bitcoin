@@ -1111,6 +1111,7 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
     // 4) Test that two less valuable UTXOs with a combined lower weight are preferred over a more valuable heavier UTXO
     // 5) Test finding a solution in a UTXO pool with mixed weights
     // 6) Test that the lightest solution among many clones is found
+    // 7) Lots of tiny UTXOs of different amounts quickly exhausts the search attempts
 
     FastRandomContext rand;
     CoinSelectionParams dummy_params{ // Only used to provide the 'avoid_partial' flag.
@@ -1267,6 +1268,33 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
         BOOST_CHECK(EquivalentResult(expected_result, *res));
         // If this takes more attempts, the implementation has regressed
         size_t expected_attempts = 42;
+        BOOST_CHECK_MESSAGE(res->GetSelectionsEvaluated() == expected_attempts, strprintf("Expected %i attempts, but got %i", expected_attempts, res->GetSelectionsEvaluated()));
+    }
+
+    {
+        // #################################################################################################################
+        // 7) Lots of tiny UTXOs of different amounts quickly exhausts the search attempts
+        // #################################################################################################################
+        SelectionResult expected_result(CAmount(0), SelectionAlgorithm::CG);
+        CAmount target =  1.9L * COIN;
+        int max_weight = 40000; // WU
+        const auto& res = CoinGrinder(target, dummy_params, m_node, max_weight, [&](CWallet& wallet) {
+            CoinsResult available_coins;
+            add_coin(available_coins, wallet, CAmount(1.8 * COIN), CFeeRate(5000), 144, false, 0, true, 2500);
+            add_coin(available_coins, wallet, CAmount(1 * COIN), CFeeRate(5000), 144, false, 0, true, 1000);
+            add_coin(available_coins, wallet, CAmount(1 * COIN), CFeeRate(5000), 144, false, 0, true, 1000);
+            for (int j = 0; j < 100; ++j) {
+                // make a 100 unique coins only differing by one sat
+                add_coin(available_coins, wallet, CAmount(0.01 * COIN + j), CFeeRate(5000), 144, false, 0, true, 110);
+            }
+            return available_coins;
+        });
+        expected_result.Clear();
+        add_coin(1.8 * COIN, 1, expected_result);
+        add_coin(1 * COIN, 2, expected_result);
+        BOOST_CHECK(EquivalentResult(expected_result, *res));
+        // If this takes more attempts, the implementation has regressed
+        size_t expected_attempts = 100'000;
         BOOST_CHECK_MESSAGE(res->GetSelectionsEvaluated() == expected_attempts, strprintf("Expected %i attempts, but got %i", expected_attempts, res->GetSelectionsEvaluated()));
     }
 }
