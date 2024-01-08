@@ -300,6 +300,9 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
             should_shift  = true;
             if (curr_weight < best_selection_weight || curr_weight == best_selection_weight && curr_amount < best_selection_amount) {
                 // New lowest weight, or same weight with fewer funds tied up
+                std::cout << "New best: [ ";
+                for (auto const& utxo_index : curr_selection) std::cout << utxo_index << " ";
+                std::cout << "]" << std::endl;
                 best_selection = curr_selection;
                 best_selection_weight = curr_weight;
                 best_selection_amount = curr_amount;
