@@ -1111,7 +1111,7 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
     // 4) Test that two less valuable UTXOs with a combined lower weight are preferred over a more valuable heavier UTXO
     // 5) Test finding a solution in a UTXO pool with mixed weights
     // 6) Test that the lightest solution among many clones is found
-    // 7) Lots of tiny UTXOs of different amounts quickly exhausts the search attempts
+    // 7) Test that lots of tiny UTXOs can be skipped if they are too heavy while there are enough funds in lookahead
 
     FastRandomContext rand;
     CoinSelectionParams dummy_params{ // Only used to provide the 'avoid_partial' flag.
@@ -1180,7 +1180,7 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
         });
         BOOST_CHECK(res);
         // If this takes more attempts, the implementation has regressed
-        size_t expected_attempts = 184;
+        size_t expected_attempts = 37;
         BOOST_CHECK_MESSAGE(res->GetSelectionsEvaluated() == expected_attempts, strprintf("Expected %i attempts, but got %i", expected_attempts, res->GetSelectionsEvaluated()));
     }
 
@@ -1228,7 +1228,7 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
         });
         BOOST_CHECK(res);
         // If this takes more attempts, the implementation has regressed
-        size_t expected_attempts = 218;
+        size_t expected_attempts = 151;
         BOOST_CHECK_MESSAGE(res->GetSelectionsEvaluated() == expected_attempts, strprintf("Expected %i attempts, but got %i", expected_attempts, res->GetSelectionsEvaluated()));
     }
 
@@ -1253,7 +1253,7 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
         });
         BOOST_CHECK(res);
         // If this takes more attempts, the implementation has regressed
-        size_t expected_attempts = 2220;
+        size_t expected_attempts = 262;
         BOOST_CHECK_MESSAGE(res->GetSelectionsEvaluated() == expected_attempts, strprintf("Expected %i attempts, but got %i", expected_attempts, res->GetSelectionsEvaluated()));
     }
 
@@ -1299,7 +1299,7 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
 
     {
         // #################################################################################################################
-        // 7) Lots of tiny UTXOs of different amounts quickly exhausts the search attempts
+        // 7) Test that lots of tiny UTXOs can be skipped if they are too heavy while there are enough funds in lookahead
         // #################################################################################################################
         SelectionResult expected_result(CAmount(0), SelectionAlgorithm::CG);
         CAmount target =  1.9L * COIN;
@@ -1316,11 +1316,11 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
             return available_coins;
         });
         expected_result.Clear();
-        add_coin(1.8 * COIN, 1, expected_result);
+        add_coin(1 * COIN, 1, expected_result);
         add_coin(1 * COIN, 2, expected_result);
         BOOST_CHECK(EquivalentResult(expected_result, *res));
         // If this takes more attempts, the implementation has regressed
-        size_t expected_attempts = 100'000;
+        size_t expected_attempts = 7;
         BOOST_CHECK_MESSAGE(res->GetSelectionsEvaluated() == expected_attempts, strprintf("Expected %i attempts, but got %i", expected_attempts, res->GetSelectionsEvaluated()));
     }
 }
