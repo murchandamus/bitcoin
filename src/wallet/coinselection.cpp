@@ -315,7 +315,7 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
         ++next_utxo;
         ++curr_try;
 
-        // EVALUATE current selection, default to EXPLORING the inclusion branch further, else do exactly one SHIFT or CUT.
+        // EVALUATE current selection: check for solutions and see whether we can CUT or SHIFT before EXPLORING further
         if (curr_amount + lookahead[curr_selection.back()] < selection_target + change_target) {
             // Insufficient funds with lookahead: CUT
             should_cut = true;
