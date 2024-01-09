@@ -338,8 +338,10 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
                 best_selection_weight = curr_weight;
                 best_selection_amount = curr_amount;
             }
-        } else if (!best_selection.empty() && curr_weight + min_tail_weight[curr_tail] * std::ceil((selection_target + change_target - curr_amount) / utxo_pool[curr_tail].GetSelectionAmount()) > best_selection_weight) {
-            // Compare minimal tail weight and last selected amount with the amount missing to gauge whether a better weight is still possible.
+        } else if (!best_selection.empty() // needed to detect when we didn’t find a solution due to exceeding max_weight
+                && curr_weight + min_tail_weight[curr_tail] * (selection_target + change_target - curr_amount + utxo_pool[curr_tail].GetSelectionAmount() - 1) / utxo_pool[curr_tail].GetSelectionAmount() > best_selection_weight) {
+            // Compare minimal tail weight and last selected amount with the amount missing to gauge whether a better weight is possible.
+            // Makes use of `ceil(a/b) = (a + b - 1) / b`
             should_cut = true;
         }
 
