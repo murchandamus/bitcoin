@@ -13,6 +13,7 @@
 #include <util/check.h>
 #include <util/moneystr.h>
 
+#include <cmath>
 #include <numeric>
 #include <optional>
 #include <queue>
@@ -374,7 +375,15 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
                 }
                 ++i;
             }
-            if (weight_accumulator[i - 1] - weight_accumulator[curr_tail] + curr_weight > best_selection_weight) {
+
+            CAmount amount_so_far = curr_amount + amount_accumulator[i-1] - amount_accumulator[curr_tail];
+            int weight_so_far = weight_accumulator[i - 1] - weight_accumulator[curr_tail] + curr_weight;
+            CAmount missing_amount = selection_target + change_target -  amount_so_far;
+            if (i < utxo_pool.size()) {
+                weight_so_far += floor(0.999999 * utxo_pool[i].m_weight * missing_amount/(double)utxo_pool[i].GetSelectionAmount());
+            }
+
+            if (weight_so_far > best_selection_weight) {
                 should_cut = true;
             }
         }
