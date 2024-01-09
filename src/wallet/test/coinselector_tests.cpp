@@ -1274,7 +1274,6 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
     }
 }
 
-
 static util::Result<SelectionResult> SelectCoinsSRD(const CAmount& target,
                                                     const CoinSelectionParams& cs_params,
                                                     const node::NodeContext& m_node,
