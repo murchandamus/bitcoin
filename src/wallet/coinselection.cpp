@@ -368,19 +368,31 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
             }
         } else if (!best_selection.empty()) {
             // Check if target can be reached without exceeding best_weight
-            size_t i = next_utxo;
-            while (i < utxo_pool.size()) {
-                if (amount_accumulator[i] - amount_accumulator[curr_tail] + curr_amount > selection_target + change_target) {
-                    break;
+            size_t lower_bound = next_utxo;
+            size_t upper_bound = utxo_pool.size() - 1;
+
+            int foo = 0;
+            while (lower_bound != upper_bound) {
+                size_t next = (lower_bound + upper_bound) / 2;
+                if (amount_accumulator[next] - amount_accumulator[curr_tail] + curr_amount > selection_target + change_target) {
+                    upper_bound = next;
+                } else {
+                    lower_bound = next;
                 }
-                ++i;
+                if (lower_bound + 1 == upper_bound) {
+                    lower_bound = upper_bound;
+                }
+                foo++;
+                if (foo > 1000) {
+                    assert (true);
+                }
             }
 
-            CAmount amount_so_far = curr_amount + amount_accumulator[i-1] - amount_accumulator[curr_tail];
-            int weight_so_far = weight_accumulator[i - 1] - weight_accumulator[curr_tail] + curr_weight;
+            CAmount amount_so_far = curr_amount + amount_accumulator[lower_bound-1] - amount_accumulator[curr_tail];
+            int weight_so_far = weight_accumulator[lower_bound - 1] - weight_accumulator[curr_tail] + curr_weight;
             CAmount missing_amount = selection_target + change_target -  amount_so_far;
-            if (i < utxo_pool.size()) {
-                weight_so_far += floor(0.999999 * utxo_pool[i].m_weight * missing_amount/(double)utxo_pool[i].GetSelectionAmount());
+            if (lower_bound < utxo_pool.size()) {
+                weight_so_far += floor(0.999999 * utxo_pool[lower_bound].m_weight * missing_amount/(double)utxo_pool[lower_bound].GetSelectionAmount());
             }
 
             if (weight_so_far > best_selection_weight) {
