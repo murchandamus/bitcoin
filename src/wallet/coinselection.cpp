@@ -37,17 +37,32 @@ struct {
     }
 } descending;
 
-// Sort by descending (effective) value prefer lower weight on tie
+static std::pair<int64_t, uint64_t> Mul128(int64_t a, int64_t b)
+{
+#ifdef __SIZEOF_INT128__
+    __int128 ret = (__int128)a * b;
+    return {ret >> 64, ret};
+#else
+    uint64_t ll = (uint64_t)(uint32_t)a * (uint32_t)b;
+    int64_t lh = (uint32_t)a * (b >> 32);
+    int64_t hl = (a >> 32) * (uint32_t)b;
+    int64_t hh = (a >> 32) * (b >> 32);
+    uint64_t mid34 = (ll >> 32) + (uint32_t)lh + (uint32_t)hl;
+    int64_t hi = hh + (lh >> 32) + (hl >> 32) + (mid34 >> 32);
+    uint64_t lo = (mid34 << 32) + (uint32_t)ll;
+    return {hi, lo};
+#endif
+}
+
 struct {
     bool operator()(const OutputGroup& a, const OutputGroup& b) const
     {
-        if (a.GetSelectionAmount() == b.GetSelectionAmount()) {
-            // Sort lower weight to front on tied effective_value
-            return a.m_weight < b.m_weight;
-        }
-        return a.GetSelectionAmount() > b.GetSelectionAmount();
+        auto cross_a = Mul128(a.GetSelectionAmount(), b.m_weight);
+        auto cross_b = Mul128(b.GetSelectionAmount(), a.m_weight);
+        if (cross_a == cross_b) return a.m_weight < b.m_weight;
+        return cross_a > cross_b;
     }
-} descending_effval_weight;
+} descending_value_per_weight;
 
 /*
  * This is the Branch and Bound Coin Selection algorithm designed by Murch. It searches for an input
@@ -206,7 +221,7 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
  * change output instead of a changeless transaction.
  *
  * @param std::vector<OutputGroup>& utxo_pool The UTXOs that we are choosing from. These UTXOs will be sorted in
- *        descending order by effective value, with lower weight preferred as a tie-breaker. (We can think of an output
+ *        descending order by amount over weight, with lower weight preferred as a tie-breaker. (We can think of an output
  *        group with multiple as a heavier UTXO with the combined amount here.)
  * @param const CAmount& selection_target This is the minimum amount that we need for the transaction without considering change.
  * @param const CAmount& change_target The minimum budget for creating a change output, by which we increase the selection_target.
@@ -215,7 +230,7 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
  */
 util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
 {
-    std::sort(utxo_pool.begin(), utxo_pool.end(), descending_effval_weight);
+    std::sort(utxo_pool.begin(), utxo_pool.end(), descending_value_per_weight);
     // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
     std::vector<CAmount> lookahead(utxo_pool.size());
     // The minimum UTXO weight among the remaining UTXOs after this UTXO index, e.g. min_tail_weight[5] = min(UTXO[6+].weight)
@@ -237,6 +252,19 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
     if (total_available < selection_target + change_target) {
         // Insufficient funds
         return util::Error();
+    }
+
+    // The sum of UTXO amounts from front to this UTXO index, e.g. amount_accumulator[5] = Σ(UTXO[0..5].amount)
+    std::vector<CAmount> amount_accumulator;
+    CAmount total_amount = 0;
+    // The sum of UTXO weights from front to this UTXO index, e.g. weight_accumulator[5] = Σ(UTXO[0..5].weight)
+    std::vector<int> weight_accumulator;
+    int total_weight = 0;
+    for (const OutputGroup& utxo : utxo_pool) {
+        total_amount += utxo.GetSelectionAmount();
+        amount_accumulator.push_back(total_amount);
+        total_weight += utxo.m_weight;
+        weight_accumulator.push_back(total_weight);
     }
 
     // CoinGrinder tracks selection via the indices of the currently selected UTXOs
@@ -337,9 +365,18 @@ util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, c
                 best_selection_weight = curr_weight;
                 best_selection_amount = curr_amount;
             }
-        } else if (!best_selection.empty() && curr_weight + min_tail_weight[curr_selection.back()] * ((selection_target + change_target - curr_amount) / utxo_pool[curr_selection.back()].GetSelectionAmount()) > best_selection_weight) {
-            // Compare minimal tail weight and last selected amount with the amount missing to gauge whether a better weight is still possible.
-            should_cut = true;
+        } else if (!best_selection.empty()) {
+            // Check if target can be reached without exceeding best_weight
+            size_t i = next_utxo;
+            while (i < utxo_pool.size()) {
+                if (amount_accumulator[i] - amount_accumulator[curr_tail] + curr_amount > selection_target + change_target) {
+                    break;
+                }
+                ++i;
+            }
+            if (weight_accumulator[i - 1] - weight_accumulator[curr_tail] + curr_weight > best_selection_weight) {
+                should_cut = true;
+            }
         }
 
         if (curr_try >= TOTAL_TRIES) {
