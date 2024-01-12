@@ -133,6 +133,78 @@ FUZZ_TARGET(coin_grinder)
     }
 }
 
+FUZZ_TARGET(coin_grinder_is_optimal)
+{
+    FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
+    std::vector<COutput> utxo_pool;
+
+    const CAmount target{fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(1, 1'000'000)};
+
+    FastRandomContext fast_random_context{ConsumeUInt256(fuzzed_data_provider)};
+    CoinSelectionParams coin_params{fast_random_context};
+    coin_params.m_subtract_fee_outputs = fuzzed_data_provider.ConsumeBool();
+    coin_params.m_long_term_feerate = CFeeRate{ConsumeMoney(fuzzed_data_provider, /*max=*/COIN)};
+    coin_params.m_effective_feerate = CFeeRate{1000 + ConsumeMoney(fuzzed_data_provider, /*max=*/COIN)};
+    coin_params.change_output_size = fuzzed_data_provider.ConsumeIntegralInRange<int>(10, 1000);
+    coin_params.change_spend_size = fuzzed_data_provider.ConsumeIntegralInRange<int>(10, 1000);
+    coin_params.m_cost_of_change= coin_params.m_effective_feerate.GetFee(coin_params.change_output_size) + coin_params.m_long_term_feerate.GetFee(coin_params.change_spend_size);
+    coin_params.m_change_fee = coin_params.m_effective_feerate.GetFee(coin_params.change_output_size);
+
+    // Create some coins
+    CAmount total_balance{0};
+    CAmount max_spendable{0};
+    int next_locktime{0};
+    unsigned max_utxos = 16;
+    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), max_utxos)
+    {
+        const CAmount amount{fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(1, 1'000'000)};
+        const int n_input_bytes{fuzzed_data_provider.ConsumeIntegralInRange<int>(41, 10000)};
+        if (total_balance + amount >= MAX_MONEY) {
+            break;
+        }
+        AddCoin(amount, /*n_input=*/0, n_input_bytes, ++next_locktime, utxo_pool, coin_params.m_effective_feerate);
+        total_balance += amount;
+        CAmount eff_value = amount - coin_params.m_effective_feerate.GetFee(n_input_bytes);
+        max_spendable += eff_value;
+    }
+    size_t num_utxos = utxo_pool.size();
+    assert(num_utxos <= max_utxos);
+
+    std::vector<OutputGroup> group_pos;
+    GroupCoins(fuzzed_data_provider, utxo_pool, coin_params, /*positive_only=*/true, group_pos);
+    size_t num_groups = group_pos.size();
+    assert(num_groups <= num_utxos);
+
+    // Run coinselection algorithms
+    CAmount change_target{CHANGE_LOWER + coin_params.m_change_fee}; // In order to ensure that it’s comparable to SRD, we must use the same change_target
+    auto result_cg = CoinGrinder(group_pos, target, change_target, MAX_STANDARD_TX_WEIGHT);
+    if (target + change_target > max_spendable || HasErrorMsg(result_cg)) return; // We only need to compare algorithms if CoinGrinder has a solution
+    assert(result_cg);
+    if (!result_cg->GetAlgoCompleted()) return; // Bail out if CoinGrinder solution is not optimal
+
+    // Brute force optimal solution
+    CAmount best_amount{MAX_MONEY};
+    int best_weight{std::numeric_limits<int>::max()};
+    for (uint32_t pattern = 1; (pattern >> num_groups) == 0; ++pattern) {
+        CAmount subset_amount{0};
+        int subset_weight{0};
+        for (unsigned i = 0; i < num_groups; ++i) {
+            if ((pattern >> i) & 1) {
+                subset_amount += group_pos[i].GetSelectionAmount();
+                subset_weight += group_pos[i].m_weight;
+            }
+        }
+        if ((subset_amount >= target + change_target) && (subset_weight < best_weight || (subset_weight == best_weight && subset_amount < best_amount))) {
+            best_weight = subset_weight;
+            best_amount = subset_amount;
+        }
+    }
+
+    assert(best_weight == result_cg->GetWeight());
+    // assert(best_amount == result_cg->GetSelectionAmount());
+}
+
+
 FUZZ_TARGET(coinselection)
 {
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
