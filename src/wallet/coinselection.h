@@ -316,7 +316,8 @@ enum class SelectionAlgorithm : uint8_t
     KNAPSACK = 1,
     SRD = 2,
     CG = 3,
-    MANUAL = 4,
+    SC = 4,
+    MANUAL = 5,
 };
 
 std::string GetAlgorithmName(const SelectionAlgorithm algo);
@@ -447,6 +448,24 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
                                              int max_selection_weight);
 
 util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_selection_weight);
+
+
+/**
+ * Sand Compactor selects OutputGroups by descending confirmation count (FIFO). If there are multiple UTXOs in an
+ * OutputGroup, the youngest UTXO (i.e. lowest confirmation count) is used to determine the group’s sorting order. Sand
+ * Compactor will usually select more OutputGroups than necessary to fund the transaction up to a limit that is
+ * inversely related to the feerate. Whenever the OutputGroup limit is exceeded during selection, the OutputGroup with
+ * the smallest effective value is dropped from the selection. This helps ensure that old UTXOs that have not been
+ * useful for other transactions organically are consolidated eventually. Sand Compactor is allowed to spend UTXOs with
+ * negative effective value below the discard feerate, so it may even pick up dust eventually.
+ *
+ * @param[in]  utxo_pool        The OutputGroups eligible for selection
+ * @param[in]  selection_target The target value to select for
+ * @param[in]  change_target    The minimum budget necessary to create a change output
+ * @param[in]  max_weight       The maximum allowed weight for a selection result to be valid
+ * @returns If successful, a valid SelectionResult, otherwise, util::Error
+ */
+util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight);
 
 /** Select coins by Single Random Draw. OutputGroups are selected randomly from the eligible
  * outputs until the target is satisfied

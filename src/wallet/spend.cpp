@@ -734,6 +734,11 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
         }
     }
 
+    // Allow SandCompactor to spend UTXOs with negative effective value at any feerate
+    if (auto sc_result{SandCompactor(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, max_selection_weight)}) {
+        results.push_back(*sc_result);
+    } else append_error(std::move(sc_result));
+
     if (auto srd_result{SelectCoinsSRD(groups.positive_group, nTargetValue, coin_selection_params.m_change_fee, coin_selection_params.rng_fast, max_selection_weight)}) {
         results.push_back(*srd_result);
     } else append_error(std::move(srd_result));

@@ -49,6 +49,14 @@ struct {
     }
 } descending_effval_weight;
 
+// Sort by descending confirmation age
+struct {
+    bool operator()(const OutputGroup& a, const OutputGroup& b) const
+    {
+        return a.m_depth > b.m_depth;
+    }
+} confs_descending;
+
 /*
  * This is the Branch and Bound Coin Selection algorithm designed by Murch. It searches for an input
  * set that can pay for the spending target and does not exceed the spending target by more than the
@@ -533,6 +541,81 @@ public:
     }
 };
 
+util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
+{
+    SelectionResult result(selection_target, SelectionAlgorithm::SC);
+    std::priority_queue<OutputGroup, std::vector<OutputGroup>, MinOutputGroupComparator> heap;
+
+    // Include a minimum change budget for Sand Compactor as we want to avoid
+    // making really small change if the selection just barely meets the target.
+    const CAmount total_target = selection_target + change_target;
+
+    // Use largest-first selection to determine minimum count of necessary output groups
+    std::sort(utxo_pool.begin(), utxo_pool.end(), descending);
+    CAmount selected_lf_amount = 0;
+    int lf_group_count = 0;
+
+    for (const OutputGroup& group : utxo_pool) {
+        selected_lf_amount += group.GetSelectionAmount();
+        lf_group_count++;
+        if (selected_lf_amount >= total_target) {
+            break;
+        }
+    }
+
+    // Sand Compactor Selection
+    OutputGroup og = utxo_pool.at(0);
+    // At low feerates allow a larger overselection:
+    //  1 s/vB: +25
+    //  2 s/vB: +13
+    //  3 s/vB: +9
+    //  5 s/vB: +5
+    //  7 s/vB: +4
+    //  9 s/vB: +3
+    // 13 s/vB: +2
+    // 25 s/vB: +1
+    int low_feerate_boost = og.fee > 0 ? (int)((25 * og.long_term_fee) / (10 * og.fee)) : 25;
+    // Never overselect more than 1/16th of the UTXO pool
+    int sixteenth = utxo_pool.size()/16;
+    // Always allow overselection of at least one OutputGroup
+    int overselection_allowance = std::max(1, std::min(sixteenth, low_feerate_boost));
+    int group_limit = lf_group_count + overselection_allowance;
+
+    std::sort(utxo_pool.begin(), utxo_pool.end(), confs_descending);
+
+    CAmount selected_eff_value = 0;
+    int weight = 0;
+    bool max_tx_weight_exceeded = false;
+    for (const OutputGroup& group : utxo_pool) {
+        heap.push(group);
+        selected_eff_value += group.GetSelectionAmount();
+        weight += group.m_weight;
+
+        if (weight > max_weight) {
+            // Store error in case no useful result is found
+            max_tx_weight_exceeded = true;
+        }
+
+        while (!heap.empty() && (weight > max_weight || (int)heap.size() > group_limit)) {
+            // Drop output group with lowest effective value
+            const OutputGroup& to_remove_group = heap.top();
+            selected_eff_value -= to_remove_group.GetSelectionAmount();
+            weight -= to_remove_group.m_weight;
+            heap.pop();
+        }
+
+        if (selected_eff_value >= total_target) {
+            // Success, return heap content
+            while (!heap.empty()) {
+                result.AddInput(heap.top());
+                heap.pop();
+            }
+            return result;
+        }
+    }
+    return max_tx_weight_exceeded ? ErrorMaxWeightExceeded() : util::Error();
+}
+
 util::Result<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value, CAmount change_fee, FastRandomContext& rng,
                                              int max_selection_weight)
 {
@@ -966,6 +1049,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::KNAPSACK: return "knapsack";
     case SelectionAlgorithm::SRD: return "srd";
     case SelectionAlgorithm::CG: return "cg";
+    case SelectionAlgorithm::SC: return "sc";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
     }
