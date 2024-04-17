@@ -313,7 +313,8 @@ enum class SelectionAlgorithm : uint8_t
     SRD = 2,
     CG = 3,
     SC = 4,
-    MANUAL = 5,
+    LF = 5,
+    MANUAL = 6,
 };
 
 std::string GetAlgorithmName(const SelectionAlgorithm algo);
@@ -449,6 +450,17 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
                                              int max_weight);
 
 util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight);
+
+/**
+ * Largest first selector picks UTXOs from highest effective value to lowest effective value.
+ *
+ * @param[in]  utxo_pool        The OutputGroups eligible for selection
+ * @param[in]  selection_target The target value to select for
+ * @param[in]  change_target    The minimum budget necessary to create a change output
+ * @param[in]  max_weight       The maximum allowed weight for a selection result to be valid
+ * @returns If successful, a valid SelectionResult, otherwise, util::Error
+ */
+util::Result<SelectionResult> LargestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight);
 
 
 /**

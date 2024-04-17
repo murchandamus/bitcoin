@@ -718,6 +718,11 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
         }
     }
 
+    // Allow Largest First to spend UTXOs with negative effective value at any feerate
+    if (auto lf_result{LargestFirst(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
+        results.push_back(*lf_result);
+    } else append_error(lf_result);
+
     // Allow SandCompactor to spend UTXOs with negative effective value at any feerate
     if (auto sc_result{SandCompactor(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
         results.push_back(*sc_result);

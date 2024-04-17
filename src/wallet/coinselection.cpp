@@ -542,6 +542,34 @@ public:
     }
 };
 
+util::Result<SelectionResult> LargestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
+{
+    SelectionResult result(selection_target, SelectionAlgorithm::LF);
+
+    // Include a minimum change budget for Largest First as we want to avoid
+    // making really small change if the selection just barely meets the target.
+    const CAmount total_target = selection_target + change_target;
+
+    std::sort(utxo_pool.begin(), utxo_pool.end(), descending);
+    CAmount selected_amount = 0;
+    int weight = 0;
+
+    for (const OutputGroup& group : utxo_pool) {
+        weight += group.m_weight;
+        selected_amount += group.GetSelectionAmount();
+        result.AddInput(group);
+        if (weight > max_weight) {
+            return ErrorMaxWeightExceeded();
+        }
+        if (selected_amount >= total_target) {
+            return result;
+        }
+    }
+
+    // Didn’t find a solution
+    return util::Error();
+}
+
 util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
 {
     SelectionResult result(selection_target, SelectionAlgorithm::SC);
