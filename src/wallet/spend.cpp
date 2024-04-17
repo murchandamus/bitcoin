@@ -697,10 +697,10 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
     // As Knapsack and SRD can create change, also deduce change weight.
     max_inputs_weight -= (coin_selection_params.change_output_size * WITNESS_SCALE_FACTOR);
 
-    // Allow Largest First to spend UTXOs with negative effective value at any feerate
-    if (auto lf_result{LargestFirst(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
-        results.push_back(*lf_result);
-    } else append_error(lf_result);
+    // Allow Smallest First to spend UTXOs with negative effective value at any feerate
+    if (auto sf_result{SmallestFirst(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
+        results.push_back(*sf_result);
+    } else append_error(sf_result);
 
     if (results.empty()) {
         // No solution found, retrieve the first explicit error (if any).

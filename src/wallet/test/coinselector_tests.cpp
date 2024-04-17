@@ -1390,7 +1390,7 @@ BOOST_AUTO_TEST_CASE(srd_tests)
     }
 }
 
-static util::Result<SelectionResult> LargestFirstHelper(const CAmount& target,
+static util::Result<SelectionResult> SmallestFirstHelper(const CAmount& target,
                                                  const CoinSelectionParams& cs_params,
                                                  const node::NodeContext& m_node,
                                                  int max_weight,
@@ -1400,12 +1400,12 @@ static util::Result<SelectionResult> LargestFirstHelper(const CAmount& target,
     CoinEligibilityFilter filter(0, 0, 0); // accept all coins without ancestors
     Groups groups = GroupOutputs(*wallet, coin_setup(*wallet), cs_params, {{filter}})[filter].all_groups;
 
-    return LargestFirst(groups.mixed_group, target, cs_params.m_min_change_target, max_weight);
+    return SmallestFirst(groups.mixed_group, target, cs_params.m_min_change_target, max_weight);
 }
 
-BOOST_AUTO_TEST_CASE(largest_first_tests)
+BOOST_AUTO_TEST_CASE(smallest_first_tests)
 {
-    // Test LargestFirst:
+    // Test SmallestFirst:
     // 1) Insufficient funds
     // 2) Exceeded max weight, coin selection always surpasses the max allowed weight.
     // 3) Select coins without surpassing the max weight (some coins surpasses the max allowed weight, some others not)
@@ -1429,7 +1429,7 @@ BOOST_AUTO_TEST_CASE(largest_first_tests)
         // #########################################################
         CAmount target = 49.5L * COIN;
         int max_weight = 10000; // high enough to not fail for this reason.
-        const auto& res = LargestFirstHelper(target, dummy_params, m_node, max_weight, [&](CWallet& wallet) {
+        const auto& res = SmallestFirstHelper(target, dummy_params, m_node, max_weight, [&](CWallet& wallet) {
             CoinsResult available_coins;
             for (int j = 0; j < 10; ++j) {
                 add_coin(available_coins, wallet, CAmount(1 * COIN));
@@ -1447,7 +1447,7 @@ BOOST_AUTO_TEST_CASE(largest_first_tests)
         // ###########################
         CAmount target = 29.5L * COIN;
         int max_weight = 3000;
-        const auto& res = LargestFirstHelper(target, dummy_params, m_node, max_weight, [&](CWallet& wallet) {
+        const auto& res = SmallestFirstHelper(target, dummy_params, m_node, max_weight, [&](CWallet& wallet) {
             CoinsResult available_coins;
             for (int j = 0; j < 10; ++j) {
                 add_coin(available_coins, wallet, CAmount(1 * COIN), CFeeRate(0), 144, false, 0, true);
@@ -1465,7 +1465,7 @@ BOOST_AUTO_TEST_CASE(largest_first_tests)
         // ################################################################################################################
         CAmount target = 25.33L * COIN;
         int max_weight = 10000; // WU
-        const auto& res = LargestFirstHelper(target, dummy_params, m_node, max_weight, [&](CWallet& wallet) {
+        const auto& res = SmallestFirstHelper(target, dummy_params, m_node, max_weight, [&](CWallet& wallet) {
             CoinsResult available_coins;
             for (int j = 0; j < 60; ++j) { // 60 UTXO --> 19,8 BTC total --> 60 × 272 WU = 16320 WU
                 add_coin(available_coins, wallet, CAmount(0.33 * COIN), CFeeRate(0), 144, false, 0, true);
