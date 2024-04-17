@@ -542,32 +542,43 @@ public:
     }
 };
 
-util::Result<SelectionResult> LargestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
+util::Result<SelectionResult> YoungestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
 {
-    SelectionResult result(selection_target, SelectionAlgorithm::LF);
+    SelectionResult result(selection_target, SelectionAlgorithm::YF);
+    std::priority_queue<OutputGroup, std::vector<OutputGroup>, MinOutputGroupComparator> heap;
 
-    // Include a minimum change budget for Largest First as we want to avoid
+    // Include a minimum change budget for Youngest First as we want to avoid
     // making really small change if the selection just barely meets the target.
     const CAmount total_target = selection_target + change_target;
 
-    std::sort(utxo_pool.begin(), utxo_pool.end(), descending);
-    CAmount selected_amount = 0;
+    std::sort(utxo_pool.begin(), utxo_pool.end(), confs_descending);
+    std::reverse(utxo_pool.begin(), utxo_pool.end());
+    CAmount selected_eff_value = 0;
     int weight = 0;
+    bool max_tx_weight_exceeded = false;
 
     for (const OutputGroup& group : utxo_pool) {
+        heap.push(group);
         weight += group.m_weight;
-        selected_amount += group.GetSelectionAmount();
-        result.AddInput(group);
+        selected_eff_value += group.GetSelectionAmount();
         if (weight > max_weight) {
-            return ErrorMaxWeightExceeded();
+            max_tx_weight_exceeded = true; // mark it in case we don't find any useful result.
+            do {
+                const OutputGroup& to_remove_group = heap.top();
+                selected_eff_value -= to_remove_group.GetSelectionAmount();
+                weight -= to_remove_group.m_weight;
+                heap.pop();
+            } while (!heap.empty() && weight > max_weight);
         }
-        if (selected_amount >= total_target) {
+        if (selected_eff_value >= total_target) {
+            while (!heap.empty()) {
+                result.AddInput(heap.top());
+                heap.pop();
+            }
             return result;
         }
     }
-
-    // Didn’t find a solution
-    return util::Error();
+    return max_tx_weight_exceeded ? ErrorMaxWeightExceeded() : util::Error();
 }
 
 util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
@@ -1077,6 +1088,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::SRD: return "srd";
     case SelectionAlgorithm::CG: return "cg";
     case SelectionAlgorithm::SC: return "sc";
+    case SelectionAlgorithm::YF: return "yf";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
     }
