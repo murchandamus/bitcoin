@@ -1047,7 +1047,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::BNB: return "bnb";
     case SelectionAlgorithm::KNAPSACK: return "knapsack";
     case SelectionAlgorithm::SRD: return "srd";
-    case SelectionAlgorithm::CG: return "cg";
+    case SelectionAlgorithm::CG: return "cgaf";
     case SelectionAlgorithm::SC: return "sc";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
