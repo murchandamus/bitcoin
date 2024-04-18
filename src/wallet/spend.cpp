@@ -704,11 +704,6 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
     // As Knapsack and SRD can create change, also deduce change weight.
     max_inputs_weight -= (coin_selection_params.change_output_size * WITNESS_SCALE_FACTOR);
 
-    // The knapsack solver has some legacy behavior where it will spend dust outputs. We retain this behavior, so don't filter for positive only here.
-    if (auto knapsack_result{KnapsackSolver(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, coin_selection_params.rng_fast, max_inputs_weight)}) {
-        results.push_back(*knapsack_result);
-    } else append_error(knapsack_result);
-
     if (coin_selection_params.m_effective_feerate > CFeeRate{3 * coin_selection_params.m_long_term_feerate}) { // Minimize input set for feerates of at least 3×LTFRE (default: 30 ṩ/vB+)
         if (auto cg_result{CoinGrinder(groups.positive_group, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
             cg_result->ComputeAndSetWaste(coin_selection_params.min_viable_change, coin_selection_params.m_cost_of_change, coin_selection_params.m_change_fee);
