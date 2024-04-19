@@ -243,8 +243,7 @@ BOOST_AUTO_TEST_CASE(sand_compactor_tests)
     TestSandCompactorSuccess("Select moderate amount", utxo_pool, /*target=*/5 * CENT);
     TestSandCompactorSuccess("Select close to maximum amount", utxo_pool, /*target=*/8.5 * CENT);
 
-    // SandCompactor needs to find the target plus a change budget
-    TestSandCompactorFail("Fail when target matches available amount", utxo_pool, /*target=*/9 * CENT);
+    TestSandCompactorSuccess("Create changeless transaction when target matches available amount", utxo_pool, /*target=*/9 * CENT);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

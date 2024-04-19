@@ -569,6 +569,19 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
         return util::Error();
     }
 
+    // Not enough funding tx and creating change, but enough for just funding tx.
+    if (selected_lf_amount < total_target) {
+        // Select positive UTXOs largest-first until transaction can be funded.
+        for (const OutputGroup& group : utxo_pool) {
+            if (group.GetSelectionAmount() > 0) {
+                result.AddInput(group);
+                if (result.GetSelectedEffectiveValue() >= selection_target) {
+                    return result;
+                }
+            }
+        }
+    }
+
     // Sand Compactor Selection
     OutputGroup og = utxo_pool.at(0);
     // At low feerates allow a larger overselection:
