@@ -584,16 +584,17 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
     // Sand Compactor Selection
     OutputGroup og = utxo_pool.at(0);
     // At low feerates allow a larger overselection:
-    //  1 s/vB: +25
-    //  2 s/vB: +13
-    //  3 s/vB: +9
-    //  5 s/vB: +5
-    //  7 s/vB: +4
-    //  9 s/vB: +3
-    // 13 s/vB: +2
-    // 25 s/vB: +1
-    int low_feerate_boost = og.fee > 0 ? (int)((25 * og.long_term_fee) / (10 * og.fee)) : 25;
-    // Never select more than 1/16th of the UTXO pool
+    //  1 s/vB: +150
+    //  2 s/vB: +75
+    //  3 s/vB: +50
+    //  5 s/vB: +30
+    //  7 s/vB: +21
+    //  9 s/vB: +16
+    // 13 s/vB: +11
+    // 25 s/vB: +6
+    // 50 s/vB: +3
+    int low_feerate_boost = og.fee > 0 ? (int)((150 * og.long_term_fee) / (10 * og.fee)) : 150;
+    // Limit overselection to 1/16th of the UTXO pool
     int sixteenth = utxo_pool.size()/16;
     // Always allow at least one additional OutputGroup
     int overselection_allowance = std::max(1, std::min(sixteenth, low_feerate_boost));
