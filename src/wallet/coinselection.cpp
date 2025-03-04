@@ -575,7 +575,7 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
     //  9 s/vB: +3
     // 13 s/vB: +2
     // 25 s/vB: +1
-    int low_feerate_boost = og.fee > 0 ? (int)((25 * og.long_term_fee) / (10 * og.fee)) : 25;
+    int low_feerate_boost = og.fee > 0 ? (int)((150 * og.long_term_fee) / (10 * og.fee)) : 25;
     // Never select more than 1/16th of the UTXO pool
     int sixteenth = utxo_pool.size()/16;
     // Always allow at least one additional OutputGroup
@@ -1048,7 +1048,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::KNAPSACK: return "knapsack";
     case SelectionAlgorithm::SRD: return "srd";
     case SelectionAlgorithm::CG: return "cg";
-    case SelectionAlgorithm::SC: return "scbd";
+    case SelectionAlgorithm::SC: return "super-sc";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
     }

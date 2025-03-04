@@ -713,9 +713,8 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
         }
     }
 
-    // Allow SandCompactor to spend UTXOs with negative effective value at feerates below the discard feerate
-    std::vector<OutputGroup> sand_compactor_utxo_pool = coin_selection_params.m_effective_feerate >= coin_selection_params.m_discard_feerate ? groups.positive_group : groups.mixed_group;
-    if (auto sc_result{SandCompactor(sand_compactor_utxo_pool, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
+    // Allow SandCompactor to spend UTXOs with negative effective value at any feerate
+    if (auto sc_result{SandCompactor(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
         results.push_back(*sc_result);
     } else append_error(sc_result);
 
