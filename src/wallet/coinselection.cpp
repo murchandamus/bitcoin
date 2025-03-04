@@ -564,6 +564,23 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
         }
     }
 
+    // Handle special case in which we don’t have enough for change, but enough to build the transaction
+    if (selected_lf_amount < total_target) {
+        // Select all UTXOs with positive effective value
+        for (const OutputGroup& group : utxo_pool) {
+            if (group.GetSelectionAmount() > 0) {
+                result.AddInput(group);
+            }
+        }
+
+        if (result.GetSelectedEffectiveValue() >= selection_target) {
+            return result;
+        }
+
+        // Insufficient funds
+        return util::Error();
+    }
+
     // Sand Compactor Selection
     OutputGroup og = utxo_pool.at(0);
     // At low feerates allow a larger overselection:
