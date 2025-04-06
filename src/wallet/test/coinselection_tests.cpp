@@ -215,6 +215,13 @@ BOOST_AUTO_TEST_CASE(bnb_feerate_sensitivity_test)
     TestBnBSuccess("Prefer two light inputs over two heavy inputs at high feerates", high_feerate_pool, /*selection_target=*/13 * CENT, /*expected_input_amounts=*/{3 * CENT, 10 * CENT}, high_feerate_params);
 }
 
+static void TestSandCompactorSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = 68)
+{
+    const auto result = SandCompactor(utxo_pool, target, cs_params.m_change_fee, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT);
+    BOOST_CHECK_MESSAGE(result, "Falsy result in SandCompactor-Success: " + test_title);
+    BOOST_CHECK_MESSAGE(result->GetSelectedValue() >= target, strprintf("Selected amount too low in SandCompactor-Success: %s. Expected at least %d, but got %d", test_title, target, result->GetSelectedValue()));
+}
+
 static void TestSandCompactorFail(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = 68)
 {
     BOOST_CHECK_MESSAGE(!SandCompactor(utxo_pool, target, cs_params.m_change_fee, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT), "SandCompactor-Fail: " + test_title);
@@ -231,6 +238,13 @@ BOOST_AUTO_TEST_CASE(sand_compactor_tests)
 
     // Fail to send 15 when 9 are available
     TestSandCompactorFail("Insufficient funds", utxo_pool, /*target=*/15 * CENT);
+
+    TestSandCompactorSuccess("Select small amount", utxo_pool, /*target=*/1 * CENT);
+    TestSandCompactorSuccess("Select moderate amount", utxo_pool, /*target=*/5 * CENT);
+    TestSandCompactorSuccess("Select close to maximum amount", utxo_pool, /*target=*/8.5 * CENT);
+
+    // SandCompactor needs to find the target plus a change budget
+    TestSandCompactorFail("Fail when target matches available amount", utxo_pool, /*target=*/9 * CENT);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
