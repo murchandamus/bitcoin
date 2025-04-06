@@ -211,5 +211,23 @@ BOOST_AUTO_TEST_CASE(bnb_feerate_sensitivity_test)
     TestBnBSuccess("Prefer two light inputs over two heavy inputs at high feerates", high_feerate_pool, /*selection_target=*/13 * CENT, /*expected_input_amounts=*/{3 * CENT, 10 * CENT}, high_feerate_params);
 }
 
+static void TestSRDFail(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = 68)
+{
+    BOOST_CHECK_MESSAGE(!SelectCoinsSRD(utxo_pool, target, cs_params.m_change_fee, cs_params.rng_fast, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT), "SRD-Fail: " + test_title);
+}
+
+BOOST_AUTO_TEST_CASE(srd_tests)
+{
+    std::vector<OutputGroup> utxo_pool;
+
+    // Fail for empty UTXO pool
+    TestSRDFail("Empty UTXO pool", utxo_pool, /*target=*/1 * CENT);
+
+    AddCoins(utxo_pool, {1 * CENT, 3 * CENT, 5 * CENT});
+
+    // Fail to send 15 when 9 are available
+    TestSRDFail("Insufficient funds", utxo_pool, /*target=*/15 * CENT);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 } // namespace wallet

@@ -1160,7 +1160,6 @@ static util::Result<SelectionResult> SelectCoinsSRD(const CAmount& target,
 BOOST_AUTO_TEST_CASE(srd_tests)
 {
     // Test SRD:
-    // 1) Insufficient funds, select all provided coins and fail.
     // 2) Exceeded max weight, coin selection always surpasses the max allowed weight.
     // 3) Select coins without surpassing the max weight (some coins surpasses the max allowed weight, some others not)
 
@@ -1176,24 +1175,6 @@ BOOST_AUTO_TEST_CASE(srd_tests)
             /*tx_noinputs_size=*/10 + 34, // static header size + output size
             /*avoid_partial=*/false,
     };
-
-    {
-        // #########################################################
-        // 1) Insufficient funds, select all provided coins and fail
-        // #########################################################
-        CAmount target = 49.5L * COIN;
-        int max_selection_weight = 10000; // high enough to not fail for this reason.
-        const auto& res = SelectCoinsSRD(target, dummy_params, m_node, max_selection_weight, [&](CWallet& wallet) {
-            CoinsResult available_coins;
-            for (int j = 0; j < 10; ++j) {
-                add_coin(available_coins, wallet, CAmount(1 * COIN));
-                add_coin(available_coins, wallet, CAmount(2 * COIN));
-            }
-            return available_coins;
-        });
-        BOOST_CHECK(!res);
-        BOOST_CHECK(util::ErrorString(res).empty()); // empty means "insufficient funds"
-    }
 
     {
         // ###########################
