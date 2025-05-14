@@ -563,6 +563,12 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
         }
     }
 
+    assert(selection_target > 0);
+    if (selected_lf_amount < selection_target) {
+        // Insufficient funds
+        return util::Error();
+    }
+
     // Sand Compactor Selection
     OutputGroup og = utxo_pool.at(0);
     // At low feerates allow a larger overselection:
