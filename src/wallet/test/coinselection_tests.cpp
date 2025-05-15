@@ -14,6 +14,8 @@ BOOST_FIXTURE_TEST_SUITE(coinselection_tests, TestingSetup)
 
 static int next_lock_time = 0;
 static FastRandomContext default_rand;
+static int P2WPKH_OUTPUT_VSIZE = 31;
+static int P2WPKH_INPUT_VSIZE = 68;
 
 /** Default coin selection parameters (dcsp) allow us to only explicitly set
  * parameters when a diverging value is relevant in the context of a test.
@@ -22,13 +24,13 @@ static CoinSelectionParams init_default_params()
 {
     CoinSelectionParams dcsp{
         /*rng_fast*/default_rand,
-        /*change_output_size=*/31,
-        /*change_spend_size=*/68,
+        /*change_output_size=*/P2WPKH_OUTPUT_VSIZE,
+        /*change_spend_size=*/P2WPKH_INPUT_VSIZE,
         /*min_change_target=*/50'000,
         /*effective_feerate=*/CFeeRate(5000),
         /*long_term_feerate=*/CFeeRate(10'000),
         /*discard_feerate=*/CFeeRate(3000),
-        /*tx_noinputs_size=*/11 + 31, //static header size + output size
+        /*tx_noinputs_size=*/11 + P2WPKH_OUTPUT_SIZE, // static header size + output size
         /*avoid_partial=*/false,
     };
     dcsp.m_change_fee = /*155 sats=*/dcsp.m_effective_feerate.GetFee(dcsp.change_output_size);
@@ -41,7 +43,7 @@ static CoinSelectionParams init_default_params()
 static const CoinSelectionParams default_cs_params = init_default_params();
 
 /** Make one OutputGroup with a single UTXO that either has a given effective value (default) or a given amount (`is_eff_value = false`). */
-static OutputGroup MakeCoin(const CAmount& amount, bool is_eff_value = true, CoinSelectionParams cs_params = default_cs_params, int custom_spending_vsize = 68)
+static OutputGroup MakeCoin(const CAmount& amount, bool is_eff_value = true, CoinSelectionParams cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
 {
     // Always assume that we only have one input
     CMutableTransaction tx;
@@ -93,7 +95,7 @@ static std::string InputAmountsToString(const SelectionResult& selection)
     return "[" + util::Join(selection.GetInputSet(), " ", [](const auto& input){ return util::ToString(input->txout.nValue);}) + "]";
 }
 
-static void TestBnBSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const std::vector<CAmount>& expected_input_amounts, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = 68)
+static void TestBnBSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const std::vector<CAmount>& expected_input_amounts, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
 {
     SelectionResult expected_result(CAmount(0), SelectionAlgorithm::BNB);
     CAmount expected_amount = 0;
@@ -215,14 +217,14 @@ BOOST_AUTO_TEST_CASE(bnb_feerate_sensitivity_test)
     TestBnBSuccess("Prefer two light inputs over two heavy inputs at high feerates", high_feerate_pool, /*selection_target=*/13 * CENT, /*expected_input_amounts=*/{3 * CENT, 10 * CENT}, high_feerate_params);
 }
 
-static void TestSandCompactorSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = 68)
+static void TestSandCompactorSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
 {
     const auto result = SandCompactor(utxo_pool, target, cs_params.m_change_fee, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT);
     BOOST_CHECK_MESSAGE(result, "Falsy result in SandCompactor-Success: " + test_title);
     BOOST_CHECK_MESSAGE(result->GetSelectedValue() >= target, strprintf("Selected amount too low in SandCompactor-Success: %s. Expected at least %d, but got %d", test_title, target, result->GetSelectedValue()));
 }
 
-static void TestSandCompactorFail(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = 68)
+static void TestSandCompactorFail(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
 {
     BOOST_CHECK_MESSAGE(!SandCompactor(utxo_pool, target, cs_params.m_change_fee, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT), "SandCompactor-Fail: " + test_title);
 }
