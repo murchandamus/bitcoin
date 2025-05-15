@@ -30,7 +30,7 @@ static CoinSelectionParams init_default_params()
         /*effective_feerate=*/CFeeRate(5000),
         /*long_term_feerate=*/CFeeRate(10'000),
         /*discard_feerate=*/CFeeRate(3000),
-        /*tx_noinputs_size=*/11 + P2WPKH_OUTPUT_SIZE, // static header size + output size
+        /*tx_noinputs_size=*/11 + P2WPKH_OUTPUT_VSIZE, // static header size + output size
         /*avoid_partial=*/false,
     };
     dcsp.m_change_fee = /*155 sats=*/dcsp.m_effective_feerate.GetFee(dcsp.change_output_size);
@@ -43,7 +43,7 @@ static CoinSelectionParams init_default_params()
 static const CoinSelectionParams default_cs_params = init_default_params();
 
 /** Make one OutputGroup with a single UTXO that either has a given effective value (default) or a given amount (`is_eff_value = false`). */
-static OutputGroup MakeCoin(const CAmount& amount, bool is_eff_value = true, CoinSelectionParams cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
+static OutputGroup MakeCoin(const CAmount& amount, bool is_eff_value = true, CoinSelectionParams cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE, int depth = 1)
 {
     // Always assume that we only have one input
     CMutableTransaction tx;
@@ -52,7 +52,7 @@ static OutputGroup MakeCoin(const CAmount& amount, bool is_eff_value = true, Coi
     tx.vout[0].nValue = amount + int(is_eff_value) * fees;
     tx.nLockTime = next_lock_time++;        // so all transactions get different hashes
     OutputGroup group(cs_params);
-    group.Insert(std::make_shared<COutput>(COutPoint(tx.GetHash(), 0), tx.vout.at(0), /*depth=*/1, /*input_bytes=*/custom_spending_vsize, /*spendable=*/true, /*solvable=*/true, /*safe=*/true, /*time=*/0, /*from_me=*/false, /*fees=*/fees), /*ancestors=*/0, /*descendants=*/0);
+    group.Insert(std::make_shared<COutput>(COutPoint(tx.GetHash(), 0), tx.vout.at(0), depth, /*input_bytes=*/custom_spending_vsize, /*spendable=*/true, /*solvable=*/true, /*safe=*/true, /*time=*/0, /*from_me=*/false, /*fees=*/fees), /*ancestors=*/0, /*descendants=*/0);
     return group;
 }
 
@@ -64,9 +64,19 @@ static void AddCoins(std::vector<OutputGroup>& utxo_pool, std::vector<CAmount> c
     }
 }
 
+/** Make several OutputGroups with the given values that have decreasing confirmation depth of at least 2 */
+static void AddAgedCoins(std::vector<OutputGroup>& utxo_pool,  std::vector<CAmount> coins, CoinSelectionParams cs_params = default_cs_params)
+{
+    int count = coins.size();
+    for (int i = 0; i < count; ++i) {
+        utxo_pool.push_back(MakeCoin(coins[i], true, cs_params, /*custom_spending_vsize=*/P2WPKH_INPUT_VSIZE, /*depth=*/count + 1 - i));
+    }
+}
+
 /** Make multiple coins that share the same effective value */
-static void AddDuplicateCoins(std::vector<OutputGroup>& utxo_pool, int count, int amount, CoinSelectionParams cs_params = default_cs_params) {
-    for (int i = 0 ; i < count; ++i) {
+static void AddDuplicateCoins(std::vector<OutputGroup>& utxo_pool, int count, int amount, CoinSelectionParams cs_params = default_cs_params)
+{
+    for (int i = 0; i < count; ++i) {
         utxo_pool.push_back(MakeCoin(amount, true, cs_params));
     }
 }
@@ -217,16 +227,32 @@ BOOST_AUTO_TEST_CASE(bnb_feerate_sensitivity_test)
     TestBnBSuccess("Prefer two light inputs over two heavy inputs at high feerates", high_feerate_pool, /*selection_target=*/13 * CENT, /*expected_input_amounts=*/{3 * CENT, 10 * CENT}, high_feerate_params);
 }
 
-static void TestSandCompactorSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
+static void TestSandCompactorSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
 {
-    const auto result = SandCompactor(utxo_pool, target, cs_params.m_change_fee, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT);
+    const auto result = SandCompactor(utxo_pool, selection_target, /*change_target=*/25'000, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT);
     BOOST_CHECK_MESSAGE(result, "Falsy result in SandCompactor-Success: " + test_title);
-    BOOST_CHECK_MESSAGE(result->GetSelectedValue() >= target, strprintf("Selected amount too low in SandCompactor-Success: %s. Expected at least %d, but got %d", test_title, target, result->GetSelectedValue()));
+    BOOST_CHECK_MESSAGE(result->GetSelectedValue() >= selection_target, strprintf("Selected amount too low in SandCompactor-Success: %s. Expected at least %d, but got %d", test_title, selection_target, result->GetSelectedValue()));
+}
+
+static void TestDeterministicSandCompactorSuccess(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target,  const std::vector<CAmount>& expected_input_amounts, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
+{
+    SelectionResult expected_result(CAmount(0), SelectionAlgorithm::SC);
+    CAmount expected_amount = 0;
+    for (CAmount input_amount : expected_input_amounts) {
+        OutputGroup group = MakeCoin(input_amount, true, cs_params, custom_spending_vsize);
+        expected_amount += group.m_value;
+        expected_result.AddInput(group);
+    }
+
+    const auto result = SandCompactor(utxo_pool, selection_target, /*change_target=*/25'000, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT);
+    BOOST_CHECK_MESSAGE(result, "Falsy result in SandCompactor-Success: " + test_title);
+    BOOST_CHECK_MESSAGE(HaveEquivalentValues(expected_result, *result), strprintf("Result mismatch in SandCompactor-Success: %s. Expected %s, but got %s", test_title, InputAmountsToString(expected_result), InputAmountsToString(*result)));
+    BOOST_CHECK_MESSAGE(result->GetSelectedValue() == expected_amount, strprintf("Selected amount mismatch in SandCompactor-Success: %s. Expected %d, but got %d", test_title, expected_amount, result->GetSelectedValue()));
 }
 
 static void TestSandCompactorFail(std::string test_title, std::vector<OutputGroup>& utxo_pool, const CAmount& target, const CoinSelectionParams& cs_params = default_cs_params, int custom_spending_vsize = P2WPKH_INPUT_VSIZE)
 {
-    BOOST_CHECK_MESSAGE(!SandCompactor(utxo_pool, target, cs_params.m_change_fee, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT), "SandCompactor-Fail: " + test_title);
+    BOOST_CHECK_MESSAGE(!SandCompactor(utxo_pool, target, /*change_target=*/25'000, /*max_selection_weight=*/MAX_STANDARD_TX_WEIGHT), "SandCompactor-Fail: " + test_title);
 }
 
 BOOST_AUTO_TEST_CASE(sand_compactor_tests)
@@ -246,6 +272,41 @@ BOOST_AUTO_TEST_CASE(sand_compactor_tests)
     TestSandCompactorSuccess("Select close to maximum amount", utxo_pool, /*target=*/8.5 * CENT);
 
     TestSandCompactorSuccess("Create changeless transaction when target matches available amount", utxo_pool, /*target=*/9 * CENT);
+}
+
+BOOST_AUTO_TEST_CASE(deterministic_sand_compactor_tests)
+{
+    std::vector<OutputGroup> utxo_pool;
+
+    // Confirmation depth: 1
+    AddDuplicateCoins(utxo_pool, 10, 10 * CENT);
+    TestDeterministicSandCompactorSuccess("Select three small young inputs", utxo_pool, /*target=*/25 * CENT, /*expected_input_amounts=*/{10 * CENT, 10 * CENT, 10 * CENT});
+
+    // Add two tiny UTXOs with 3 and 2 confirmations
+    AddAgedCoins(utxo_pool, {1 * CENT, 1 * CENT});
+    TestDeterministicSandCompactorSuccess("Overselect one with three small young inputs", utxo_pool, /*target=*/25 * CENT, /*expected_input_amounts=*/{1 * CENT, 10 * CENT, 10 * CENT, 10 * CENT});
+
+    // Confirmation depths: 7, 6, 5, 4, 3, 2
+    AddAgedCoins(utxo_pool, {10 * CENT, 11 * CENT, 12 * CENT, 30 * CENT, 50 * CENT, 70 * CENT});
+    // Single UTXO is enough, for current small UTXO pool overselection is limited to 1 UTXO
+    TestDeterministicSandCompactorSuccess("Overselect one input", utxo_pool, /*target=*/25 * CENT, /*expected_input_amounts=*/{12 * CENT, 30 * CENT});
+
+    // Add more young coins to increase overselection allowance
+    AddDuplicateCoins(utxo_pool, 90, 10 * CENT);
+    TestDeterministicSandCompactorSuccess("Overselect two inputs", utxo_pool, /*target=*/25 * CENT, /*expected_input_amounts=*/{10 * CENT, 11 * CENT, 12 * CENT});
+
+    // Add ten small old UTXOs
+    AddAgedCoins(utxo_pool, {1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT});
+    // Overselection is now limited by the feerate to five, single 50 CENT UTXO would still be enough
+    TestDeterministicSandCompactorSuccess("Overselect five inputs", utxo_pool, /*target=*/25 * CENT, /*expected_input_amounts=*/{1 * CENT, 1 * CENT, 1 * CENT, 10 * CENT, 11 * CENT, 12 * CENT});
+
+    // Adding many additional young UTXOs doesn’t change result
+    AddDuplicateCoins(utxo_pool, 900, 10 * CENT);
+    TestDeterministicSandCompactorSuccess("Overselect five inputs", utxo_pool, /*target=*/25 * CENT, /*expected_input_amounts=*/{1 * CENT, 1 * CENT, 1 * CENT, 10 * CENT, 11 * CENT, 12 * CENT});
+
+    // Adding more old UTXOs also doesn’t change the result
+    AddAgedCoins(utxo_pool, {1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT, 1 * CENT});
+    TestDeterministicSandCompactorSuccess("Overselect five inputs", utxo_pool, /*target=*/25 * CENT, /*expected_input_amounts=*/{1 * CENT, 1 * CENT, 1 * CENT, 10 * CENT, 11 * CENT, 12 * CENT});
 }
 
 BOOST_AUTO_TEST_SUITE_END()
