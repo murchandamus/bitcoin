@@ -563,13 +563,13 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
         }
     }
 
+    // Exit early if insufficient funds
     assert(selection_target > 0);
     if (selected_lf_amount < selection_target) {
-        // Insufficient funds
         return util::Error();
     }
 
-    // Not enough funding tx and creating change, but enough for just funding tx.
+    // Enough for funding tx, but below minChange
     if (selected_lf_amount < total_target) {
         // Select positive UTXOs largest-first until transaction can be funded.
         for (const OutputGroup& group : utxo_pool) {
