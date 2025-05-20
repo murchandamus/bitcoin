@@ -571,11 +571,13 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
 
     // Enough for funding tx, but below minChange
     if (selected_lf_amount < total_target) {
+        CAmount selected_amount = 0;
         // Select positive UTXOs largest-first until transaction can be funded.
         for (const OutputGroup& group : utxo_pool) {
             if (group.GetSelectionAmount() > 0) {
                 result.AddInput(group);
-                if (result.GetSelectedEffectiveValue() >= selection_target) {
+                selected_amount += group.GetSelectionAmount();
+                if (selected_amount >= selection_target) {
                     return result;
                 }
             }
