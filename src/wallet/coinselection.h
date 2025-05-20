@@ -142,7 +142,7 @@ struct CoinSelectionParams {
     int change_output_size = 0;
     /** Size of the input to spend a change output in virtual bytes. */
     int change_spend_size = 0;
-    /** Mininmum change to target in Knapsack solver and CoinGrinder:
+    /** Minimum change to target in CoinGrinder:
      * select coins to cover the payment and at least this value of change. */
     CAmount m_min_change_target{0};
     /** Minimum amount for creating a change output.
@@ -478,10 +478,6 @@ util::Result<SelectionResult> SandCompactor(std::vector<OutputGroup>& utxo_pool,
  */
 util::Result<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value, CAmount change_fee, FastRandomContext& rng,
                                              int max_selection_weight);
-
-// Original coin selection algorithm as a fallback
-util::Result<SelectionResult> KnapsackSolver(std::vector<OutputGroup>& groups, const CAmount& nTargetValue,
-                                             CAmount change_target, FastRandomContext& rng, int max_selection_weight);
 } // namespace wallet
 
 #endif // BITCOIN_WALLET_COINSELECTION_H
