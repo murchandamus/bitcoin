@@ -317,6 +317,7 @@ enum class SelectionAlgorithm : uint8_t
     SRD = 2,
     CG = 3,
     MANUAL = 4,
+    BNBSF = 5,
 };
 
 std::string GetAlgorithmName(const SelectionAlgorithm algo);
@@ -444,6 +445,9 @@ public:
 };
 
 util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CAmount& cost_of_change,
+                                             int max_selection_weight);
+
+util::Result<SelectionResult> SelectCoinsBnBSmallestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CAmount& cost_of_change,
                                              int max_selection_weight);
 
 util::Result<SelectionResult> CoinGrinder(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_selection_weight);

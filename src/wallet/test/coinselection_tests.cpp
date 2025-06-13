@@ -188,11 +188,11 @@ BOOST_AUTO_TEST_CASE(bnb_test)
         TestBnBSuccess("Combine smallest 8 of 17 unique UTXOs", doppelganger_pool, /*selection_target=*/8 * CENT, /*expected_input_amounts=*/expected_inputs, /*expected_attempts=*/51'765, cs_params);
 
         // Among up to 18 unique UTXOs of similar effective value we will find a solution composed of the eight smallest UTXOs
-        AddCoins(doppelganger_pool, {1 * CENT + default_cs_params.m_cost_of_change + 17});
+        AddCoins(doppelganger_pool, {1 * CENT + default_cs_params.m_cost_of_change + 17}, cs_params);
         TestBnBSuccess("Combine smallest 8 of 18 unique UTXOs", doppelganger_pool, /*selection_target=*/8 * CENT, /*expected_input_amounts=*/expected_inputs, /*expected_attempts=*/87'957, cs_params);
 
         // Starting with 19 unique UTXOs of similar effective value we will not find the solution due to exceeding the attempt limit
-        AddCoins(doppelganger_pool, {1 * CENT + default_cs_params.m_cost_of_change + 18});
+        AddCoins(doppelganger_pool, {1 * CENT + default_cs_params.m_cost_of_change + 18}, cs_params);
         TestBnBFail("Exhaust looking for smallest 8 of 19 unique UTXOs", doppelganger_pool, /*selection_target=*/8 * CENT);
     }
 }

@@ -33,6 +33,18 @@ struct {
             // Lower waste is better when effective_values are tied
             return (a.fee - a.long_term_fee) < (b.fee - b.long_term_fee);
         }
+        return a.GetSelectionAmount() < b.GetSelectionAmount();
+    }
+} ascending;
+
+// Sort by descending (effective) value prefer lower waste on tie
+struct {
+    bool operator()(const OutputGroup& a, const OutputGroup& b) const
+    {
+        if (a.GetSelectionAmount() == b.GetSelectionAmount()) {
+            // Lower waste is better when effective_values are tied
+            return (a.fee - a.long_term_fee) < (b.fee - b.long_term_fee);
+        }
         return a.GetSelectionAmount() > b.GetSelectionAmount();
     }
 } descending;
@@ -133,6 +145,11 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
         return util::Error();
     }
 
+    bool is_feerate_high = (utxo_pool.at(0).long_term_fee != 0) ? utxo_pool.at(0).fee > utxo_pool.at(0).long_term_fee : 1;
+
+    if (!is_feerate_high) {
+        return SelectCoinsBnBSmallestFirst(utxo_pool, selection_target, cost_of_change, max_selection_weight);
+    }
 
     // The current selection and the best input set found so far, stored as the utxo_pool indices of the UTXOs forming them
     std::vector<size_t> curr_selection;
@@ -165,7 +182,6 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
     size_t curr_try = 0;
     SelectionResult result(selection_target, SelectionAlgorithm::BNB);
     bool is_done = false;
-    bool is_feerate_high = utxo_pool.at(0).fee > utxo_pool.at(0).long_term_fee;
     while (!is_done) {
         bool should_shift{false}, should_cut{false};
         // Select `next_utxo`
@@ -208,6 +224,192 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
                 best_waste = curr_waste;
             }
         }
+
+        if (curr_try >= TOTAL_TRIES) {
+            // Solution is not guaranteed to be optimal if `curr_try` hit TOTAL_TRIES
+            result.SetAlgoCompleted(false);
+            break;
+        }
+
+        if (next_utxo == utxo_pool.size()) {
+            // Last added UTXO was end of UTXO pool, nothing left to add on inclusion or omission branch: CUT
+            should_cut = true;
+        }
+
+        if (should_cut) {
+            // Neither adding to the current selection nor exploring the omission branch of the last selected UTXO can
+            // find any solutions. Redirect to exploring the Omission branch of the penultimate selected UTXO (i.e.
+            // set `next_utxo` to one after the penultimate selected, then deselect the last two selected UTXOs)
+            deselect_last();
+            should_shift  = true;
+        }
+
+        while (should_shift) {
+            if (curr_selection.empty()) {
+                // Exhausted search space before running into attempt limit
+                is_done = true;
+                result.SetAlgoCompleted(true);
+                break;
+            }
+            // Set `next_utxo` to one after last selected, then deselect last selected UTXO
+            next_utxo = curr_selection.back() + 1;
+            deselect_last();
+            should_shift  = false;
+
+            // After SHIFTing to an omission branch, the `next_utxo` might have the same effective value as the
+            // UTXO we just omitted. Since lower waste is our tiebreaker on UTXOs with equal effective value for sorting, if it
+            // ties on the effective value, it _must_ have the same waste (i.e. be a "clone" of the prior UTXO) or a
+            // higher waste.  If so, selecting `next_utxo` would produce an equivalent or worse
+            // selection as one we previously evaluated. In that case, increment `next_utxo` until we find a UTXO with a
+            // differing amount.
+            while (utxo_pool[next_utxo - 1].GetSelectionAmount() == utxo_pool[next_utxo].GetSelectionAmount()) {
+                if (next_utxo >= utxo_pool.size() - 1) {
+                    // Reached end of UTXO pool skipping clones: SHIFT instead
+                    should_shift = true;
+                    break;
+                }
+                // Skip clone: previous UTXO is equivalent and unselected
+                ++next_utxo;
+            }
+        }
+    }
+
+    result.SetSelectionsEvaluated(curr_try);
+
+    if (best_selection.empty()) {
+        return max_tx_weight_exceeded ? ErrorMaxWeightExceeded() : util::Error();
+    }
+
+    for (const size_t& i : best_selection) {
+        result.AddInput(utxo_pool.at(i));
+    }
+
+    return result;
+}
+
+util::Result<SelectionResult> SelectCoinsBnBSmallestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CAmount& cost_of_change,
+                                             int max_selection_weight)
+{
+    std::sort(utxo_pool.begin(), utxo_pool.end(), ascending);
+    // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
+    std::vector<CAmount> lookahead(utxo_pool.size());
+    std::vector<CAmount> min_waste_lookahead(utxo_pool.size());
+
+    // Calculate lookahead values, and check that there are sufficient funds
+    CAmount total_available = 0;
+    for (int index = static_cast<int>(utxo_pool.size()) - 1; index >= 0; --index) {
+        lookahead[index] = total_available;
+        CAmount curr_waste = utxo_pool[index].fee - utxo_pool[index].long_term_fee;
+        if (index == utxo_pool.size() - 1) {
+            min_waste_lookahead[index] = curr_waste;
+        } else {
+            min_waste_lookahead[index] = std::min(curr_waste, min_waste_lookahead[index + 1]);
+        }
+        // UTXOs with non-positive effective value must have been filtered
+        Assume(utxo_pool[index].GetSelectionAmount() > 0);
+        total_available += utxo_pool[index].GetSelectionAmount();
+    }
+
+    if (total_available < selection_target) {
+        // Insufficient funds
+        return util::Error();
+    }
+
+
+    // The current selection and the best input set found so far, stored as the utxo_pool indices of the UTXOs forming them
+    std::vector<size_t> curr_selection;
+    std::vector<size_t> best_selection;
+
+    // The currently selected effective amount
+    CAmount curr_amount = 0;
+
+    // The waste score of the current selection, and the best waste score so far
+    CAmount curr_selection_waste = 0;
+    CAmount best_waste = MAX_MONEY;
+
+    // The weight of the currently selected input set
+    int curr_weight = 0;
+
+    // Whether the input sets generated during this search have exceeded the maximum transaction weight at any point
+    bool max_tx_weight_exceeded = false;
+
+    // Index of the next UTXO to consider in utxo_pool
+    size_t next_utxo = 0;
+
+    auto deselect_last = [&]() {
+        OutputGroup& utxo = utxo_pool[curr_selection.back()];
+        curr_amount -= utxo.GetSelectionAmount();
+        curr_weight -= utxo.m_weight;
+        curr_selection_waste -= utxo.fee - utxo.long_term_fee;
+        curr_selection.pop_back();
+    };
+
+    std::cout << "Feerate is " << utxo_pool[0].fee *10000 / utxo_pool[0].long_term_fee << ", target is " << selection_target << std::endl;
+    std::cout << "UTXO pool: [";
+    for (auto u : utxo_pool) {
+        std::cout << u.GetSelectionAmount() << " ";
+    }
+    std::cout << "]" << std::endl;
+
+    size_t curr_try = 0;
+    SelectionResult result(selection_target, SelectionAlgorithm::BNBSF);
+    bool is_done = false;
+    while (!is_done) {
+        bool should_shift{false}, should_cut{false};
+        // Select `next_utxo`
+        OutputGroup& utxo = utxo_pool[next_utxo];
+        curr_amount += utxo.GetSelectionAmount();
+        curr_weight += utxo.m_weight;
+        curr_selection_waste += utxo.fee - utxo.long_term_fee;
+        curr_selection.push_back(next_utxo);
+        ++next_utxo;
+        ++curr_try;
+
+        std::cout << "Current input set: [";
+        for (auto i : curr_selection) {
+            std::cout << utxo_pool[i].GetSelectionAmount() << " ";
+        }
+        std::cout << "]" << std::endl;
+
+        // EVALUATE current selection: check for solutions and see whether we can CUT or SHIFT before EXPLORING further
+        if (curr_amount + lookahead[curr_selection.back()] < selection_target) {
+            // Insufficient funds with lookahead: CUT
+            should_cut = true;
+            std::cout << "CUT due to LOOKAHEAD" << std::endl;
+        } else if (curr_weight > max_selection_weight) {
+            // max_weight exceeded: SHIFT
+            max_tx_weight_exceeded = true;
+            should_shift  = true;
+            std::cout << "SHIFT due to max_tx_weight" << std::endl;
+        } else if (curr_amount > selection_target + cost_of_change) {
+            // Overshot target range: CUT
+            should_cut = true;
+            std::cout << "CUT due to OVERSHOT" << std::endl;
+        } else if (curr_amount >= selection_target) {
+            // Selection is within target window: potential solution
+            // Adding more UTXOs only increases fees and cannot be better: SHIFT
+            should_shift  = true;
+            std::cout << "SHIFT due to solution candidate" << std::endl;
+            // The amount exceeding the selection_target (the "excess"), would be dropped to the fees: it is waste.
+            CAmount curr_excess = curr_amount - selection_target;
+            CAmount curr_waste = curr_selection_waste + curr_excess;
+            if (curr_waste <= best_waste) {
+                // New best solution
+                best_selection = curr_selection;
+                best_waste = curr_waste;
+                std::cout << "NEW BEST! curr_selection_waste: " << curr_selection_waste << ", best_waste: " << best_waste << std::endl;
+            }
+        } else if (curr_selection_waste + ((selection_target - curr_amount + utxo.GetSelectionAmount() - 1) / utxo.GetSelectionAmount()) * min_waste_lookahead[next_utxo] > best_waste) {
+            std::cout << "CUT due to MIN_WASTE_LOOKAHEAD, curr_selection_waste: " << curr_selection_waste << ", min_waste_lookahead: " << min_waste_lookahead[next_utxo] << std::endl;
+            std::cout << "predicted max number of UTXOs fitting: " << ((selection_target - curr_amount + utxo.GetSelectionAmount() - 1) / utxo.GetSelectionAmount())<< std::endl;
+            should_cut = true;
+        } else if (curr_amount + utxo.GetSelectionAmount() > selection_target + cost_of_change) {
+            // No solution, and adding the same amount as the latest UTXO would overshoot: SHIFT
+            should_shift  = true;
+            std::cout << "SHIFT due to doubling last addition will overshoot" << std::endl;
+        }
+        std::cout << "General info: curr_selection_waste: " << curr_selection_waste << ", min_waste_lookahead: " << min_waste_lookahead[next_utxo] << std::endl;
+        std::cout << "General info: predicted max number of UTXOs fitting: " << ((selection_target - curr_amount + utxo.GetSelectionAmount() - 1) / utxo.GetSelectionAmount())<< std::endl;
 
         if (curr_try >= TOTAL_TRIES) {
             // Solution is not guaranteed to be optimal if `curr_try` hit TOTAL_TRIES
@@ -1039,6 +1241,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::SRD: return "srd";
     case SelectionAlgorithm::CG: return "cg";
     case SelectionAlgorithm::MANUAL: return "manual";
+    case SelectionAlgorithm::BNBSF: return "bnbsf";
     // No default case to allow for compiler to warn
     }
     assert(false);
