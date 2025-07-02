@@ -734,6 +734,10 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
         }
     }
 
+    if (auto lf_result{LargestFirst(groups.positive_group, nTargetValue, coin_selection_params.m_min_change_target, max_selection_weight)}) {
+        results.push_back(*lf_result);
+    } else append_error(std::move(lf_result));
+
     if (auto srd_result{SelectCoinsSRD(groups.positive_group, nTargetValue, coin_selection_params.m_change_fee, coin_selection_params.rng_fast, max_selection_weight)}) {
         results.push_back(*srd_result);
     } else append_error(std::move(srd_result));

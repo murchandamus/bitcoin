@@ -533,6 +533,40 @@ public:
     }
 };
 
+util::Result<SelectionResult> LargestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
+{
+    SelectionResult result(selection_target, SelectionAlgorithm::LF);
+
+    // Include a minimum change budget for LargestFirst as we want to avoid
+    // making really small change if the selection just barely meets the target.
+    const CAmount total_target = selection_target + change_target;
+
+    // Use largest-first selection to determine minimum count of necessary output groups
+    std::sort(utxo_pool.begin(), utxo_pool.end(), descending);
+    CAmount selected_eff_value = 0;
+    int weight = 0;
+
+    for (const OutputGroup& group : utxo_pool) {
+        weight += group.m_weight;
+        selected_eff_value += group.GetSelectionAmount();
+        result.AddInput(group);
+
+        if (weight > max_weight) {
+            return ErrorMaxWeightExceeded();
+        }
+
+        if (selected_eff_value >= total_target) {
+            // Success
+            return result;
+        }
+    }
+    if (selected_eff_value >= selection_target) {
+        // Not enough for change, but enough for changeless solution
+        return result;
+    }
+    return util::Error();
+}
+
 util::Result<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value, CAmount change_fee, FastRandomContext& rng,
                                              int max_selection_weight)
 {
@@ -966,6 +1000,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::KNAPSACK: return "knapsack";
     case SelectionAlgorithm::SRD: return "srd";
     case SelectionAlgorithm::CG: return "cg";
+    case SelectionAlgorithm::LF: return "lf";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
     }
