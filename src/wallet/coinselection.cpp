@@ -25,6 +25,18 @@ static util::Result<SelectionResult> ErrorMaxWeightExceeded()
                          "Please try sending a smaller amount or manually consolidating your wallet's UTXOs")};
 }
 
+// Sort by ascending (effective) value prefer lower waste on tie
+struct {
+    bool operator()(const OutputGroup& a, const OutputGroup& b) const
+    {
+        if (a.GetSelectionAmount() == b.GetSelectionAmount()) {
+            // Lower waste is better when effective_values are tied
+            return (a.fee - a.long_term_fee) > (b.fee - b.long_term_fee);
+        }
+        return a.GetSelectionAmount() < b.GetSelectionAmount();
+    }
+} ascending;
+
 // Sort by descending (effective) value prefer lower waste on tie
 struct {
     bool operator()(const OutputGroup& a, const OutputGroup& b) const
@@ -533,6 +545,49 @@ public:
     }
 };
 
+util::Result<SelectionResult> SmallestFirst(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, CAmount change_target, int max_weight)
+{
+    SelectionResult result(selection_target, SelectionAlgorithm::SF);
+    std::priority_queue<OutputGroup, std::vector<OutputGroup>, MinOutputGroupComparator> heap;
+
+    const CAmount total_target = selection_target + change_target;
+
+    std::sort(utxo_pool.begin(), utxo_pool.end(), ascending);
+    CAmount selected_eff_value = 0;
+    int weight = 0;
+
+    bool max_tx_weight_exceeded = false;
+    for (const OutputGroup& group : utxo_pool) {
+        heap.push(group);
+        selected_eff_value += group.GetSelectionAmount();
+        weight += group.m_weight;
+
+        if (weight > max_weight) {
+            max_tx_weight_exceeded = true; // mark it in case we don't find any useful result.
+            do {
+                const OutputGroup& to_remove_group = heap.top();
+                selected_eff_value -= to_remove_group.GetSelectionAmount();
+                weight -= to_remove_group.m_weight;
+                heap.pop();
+            } while (!heap.empty() && weight > max_weight);
+        }
+
+        if (selected_eff_value >= total_target) {
+            // Result found, add it.
+            while (!heap.empty()) {
+                result.AddInput(heap.top());
+                heap.pop();
+            }
+            return result;
+        }
+    }
+    if (selected_eff_value >= selection_target) {
+        // Not enough for change, but enough for changeless solution
+        return result;
+    }
+    return max_tx_weight_exceeded ? ErrorMaxWeightExceeded() : util::Error();
+}
+
 util::Result<SelectionResult> SelectCoinsSRD(const std::vector<OutputGroup>& utxo_pool, CAmount target_value, CAmount change_fee, FastRandomContext& rng,
                                              int max_selection_weight)
 {
@@ -966,6 +1021,7 @@ std::string GetAlgorithmName(const SelectionAlgorithm algo)
     case SelectionAlgorithm::KNAPSACK: return "knapsack";
     case SelectionAlgorithm::SRD: return "srd";
     case SelectionAlgorithm::CG: return "cg";
+    case SelectionAlgorithm::SF: return "sf";
     case SelectionAlgorithm::MANUAL: return "manual";
     // No default case to allow for compiler to warn
     }
