@@ -225,9 +225,19 @@ FUZZ_TARGET(bnb_is_optimal)
     CoinSelectionParams coin_params{fast_random_context};
     coin_params.m_subtract_fee_outputs = false;
     // Set effective feerate up to MAX_MONEY sats per 1'000'000 vB (2'100'000'000 sat/vB = 21'000 BTC/kvB).
-    coin_params.m_effective_feerate = CFeeRate{ConsumeMoney(fuzzed_data_provider, MAX_MONEY), 1'000'000};
-    coin_params.m_long_term_feerate = CFeeRate{ConsumeMoney(fuzzed_data_provider, MAX_MONEY), 1'000'000};
+    coin_params.m_effective_feerate = CFeeRate{ConsumeMoney(fuzzed_data_provider, 10'000'000), 1'000};
+    coin_params.m_long_term_feerate = CFeeRate{ConsumeMoney(fuzzed_data_provider, 10'000'000), 1'000};
+    coin_params.m_discard_feerate = CFeeRate{ConsumeMoney(fuzzed_data_provider, 10'000'000), 1'000};
     coin_params.m_cost_of_change = ConsumeMoney(fuzzed_data_provider);
+
+    coin_params.change_output_size = fuzzed_data_provider.ConsumeIntegralInRange(1, MAX_SCRIPT_SIZE);
+    coin_params.m_change_fee = coin_params.m_effective_feerate.GetFee(coin_params.change_output_size);
+    coin_params.change_spend_size = fuzzed_data_provider.ConsumeIntegralInRange<int>(41, 1000);
+    const auto change_spend_fee{coin_params.m_discard_feerate.GetFee(coin_params.change_spend_size)};
+    coin_params.m_cost_of_change = coin_params.m_change_fee + change_spend_fee;
+    CScript change_out_script = CScript() << std::vector<unsigned char>(coin_params.change_output_size, OP_TRUE);
+    const auto dust{GetDustThreshold(CTxOut{/*nValueIn=*/0, change_out_script}, coin_params.m_discard_feerate)};
+    coin_params.min_viable_change = std::max(change_spend_fee + 1, dust);
 
     // Create some coins
     CAmount max_spendable{0};
@@ -237,7 +247,7 @@ FUZZ_TARGET(bnb_is_optimal)
     LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), max_output_groups)
     {
         // With maximum m_effective_feerate and n_input_bytes = 1'000'000, input_fee <= MAX_MONEY.
-        const int n_input_bytes{fuzzed_data_provider.ConsumeIntegralInRange<int>(1, 1'000'000)};
+        const int n_input_bytes{fuzzed_data_provider.ConsumeIntegralInRange<int>(1, 10'000)};
         // Only make UTXOs with positive effective value
         const CAmount input_fee = coin_params.m_effective_feerate.GetFee(n_input_bytes);
         // Ensure that each UTXO has at least an effective value of 1 sat
@@ -264,7 +274,7 @@ FUZZ_TARGET(bnb_is_optimal)
     int best_weight{std::numeric_limits<int>::max()};
     for (uint32_t pattern = 1; (pattern >> num_groups) == 0; ++pattern) {
         CAmount subset_amount{0};
-        int subset_waste{0};
+        CAmount subset_waste{0};
         int subset_weight{0};
         for (unsigned i = 0; i < num_groups; ++i) {
             if ((pattern >> i) & 1) {
@@ -274,15 +284,27 @@ FUZZ_TARGET(bnb_is_optimal)
             }
         }
         // Add the excess to waste score
-        subset_waste += subset_amount - target;
-        if (subset_amount >= target && subset_amount < target + coin_params.m_cost_of_change && subset_waste < best_waste) {
-            best_waste = subset_waste;
-            best_weight = subset_weight;
+        if (subset_amount >= target && subset_amount <= target + coin_params.m_cost_of_change) {
+            subset_waste += subset_amount - target;
+            SelectionResult result_bf(target, SelectionAlgorithm::MANUAL);
+            for (unsigned i = 0; i < num_groups; ++i) {
+                if ((pattern >> i) & 1) {
+                    result_bf.AddInput(group_pos[i]);
+                }
+            }
+            if (subset_waste < best_waste) {
+                solution_found = true;
+                best_waste = subset_waste;
+                result_bf.RecalculateWaste(coin_params.min_viable_change, coin_params.m_cost_of_change, coin_params.m_change_fee);
+                assert(result_bf.GetWaste() == best_waste);
+                best_weight = subset_weight;
+            }
         }
     }
 
     int high_max_selection_weight = fuzzed_data_provider.ConsumeIntegralInRange<int>(best_weight, std::numeric_limits<int>::max());
     auto result_bnb = SelectCoinsBnB(group_pos, target, coin_params.m_cost_of_change, high_max_selection_weight);
+
     if (!solution_found) {
         assert(!result_bnb);
     }
@@ -290,9 +312,10 @@ FUZZ_TARGET(bnb_is_optimal)
     if (solution_found && best_waste < std::numeric_limits<int>::max()) {
         // If brute forcing found a solution with an acceptable weight, BnB should find at least any solution
         assert(result_bnb);
+        result_bnb->RecalculateWaste(coin_params.min_viable_change, coin_params.m_cost_of_change, coin_params.m_change_fee);
         assert(result_bnb->GetWeight() <= high_max_selection_weight);
         assert(result_bnb->GetSelectedEffectiveValue() >= target);
-        assert(result_bnb->GetSelectedEffectiveValue() < target + coin_params.m_cost_of_change);
+        assert(result_bnb->GetSelectedEffectiveValue() <= target + coin_params.m_cost_of_change);
         assert(best_waste <= result_bnb->GetWaste());
         if (result_bnb->GetAlgoCompleted()) {
             // If BnB exhausted the search space, it must return the optimal solution
