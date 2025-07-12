@@ -112,7 +112,7 @@ struct {
 
 static const size_t TOTAL_TRIES = 100000;
 
-util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CAmount& cost_of_change,
+util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CoinSelectionParams& cs_params,
                                              int max_selection_weight)
 {
     std::sort(utxo_pool.begin(), utxo_pool.end(), descending);
@@ -185,7 +185,7 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
             // max_weight exceeded: SHIFT
             max_tx_weight_exceeded = true;
             should_shift  = true;
-        } else if (curr_amount > selection_target + cost_of_change) {
+        } else if (curr_amount > selection_target + cs_params.cost_of_change) {
             // Overshot target range: SHIFT
             should_shift = true;
         } else if (is_feerate_high && curr_selection_waste > best_waste) {
@@ -267,6 +267,10 @@ util::Result<SelectionResult> SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool
     for (const size_t& i : best_selection) {
         result.AddInput(utxo_pool.at(i));
     }
+
+    result.RecalculateWaste(cs_params.min_viable_change, cs_params.m_cost_of_change, cs_params.m_change_fee);
+
+    assert(best_waste == result.GetWaste());
 
     return result;
 }

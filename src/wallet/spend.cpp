@@ -708,7 +708,7 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
 
     // SFFO frequently causes issues in the context of changeless input sets: skip BnB when SFFO is active
     if (!coin_selection_params.m_subtract_fee_outputs) {
-        if (auto bnb_result{SelectCoinsBnB(groups.positive_group, nTargetValue, coin_selection_params.m_cost_of_change, max_selection_weight)}) {
+        if (auto bnb_result{SelectCoinsBnB(groups.positive_group, nTargetValue, coin_selection_params, max_selection_weight)}) {
             results.push_back(*bnb_result);
         } else append_error(std::move(bnb_result));
     }
